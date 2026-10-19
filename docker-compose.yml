@@ -96,9 +96,69 @@ services:
     networks:
       - devmonitor
 
+  # 4. Prometheus Metrics Collection & Storage Service
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    container_name: devmonitor-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      # Published on LOOPBACK ONLY. Prometheus has no authentication
+      # and must NEVER be exposed publicly on external/LAN network interfaces.
+      - "127.0.0.1:9090:9090"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:9090/-/healthy || exit 1"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    networks:
+      - devmonitor
+
+  # 5. Node Exporter Hardware & OS Telemetry Service
+  node-exporter:
+    image: prom/node-exporter:v1.9.0
+    container_name: devmonitor-node-exporter
+    restart: unless-stopped
+    command:
+      - --path.rootfs=/host
+    volumes:
+      # Host root mounted read-only.
+      # Note: rslave is rejected on Docker Desktop (WSL2/Windows) with
+      # "path / is not a shared or slave mount", so we fall back to /:/host:ro.
+      - /:/host:ro
+    # Node Exporter is intentionally NOT published to the host (no ports).
+    # It is reachable only internally by Prometheus on the devmonitor network at node-exporter:9100.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:9100/metrics || exit 1"]
+      interval: 15s
+      timeout: 5s
+      start_period: 5s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    networks:
+      - devmonitor
+
 volumes:
   postgres_data:
     name: devmonitor_postgres_data
+  prometheus_data:
+    name: devmonitor_prometheus_data
 
 networks:
   devmonitor:
