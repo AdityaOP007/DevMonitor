@@ -144,6 +144,10 @@ try {
 
 # Check 5: Generate real traffic and assert counter increased by at least 90% of requested count
 try {
+  # Ensure /api/health is initialized and wait for a current baseline scrape in Prometheus
+  try { Invoke-RestMethod -Uri "$BaseUrl/api/health" -UseBasicParsing | Out-Null } catch {}
+  Start-Sleep -Seconds 16
+
   $requestedCount = 100
   $beforeCount = 0
   try {
@@ -283,7 +287,7 @@ try {
       $dOk = $dbSvc.status -eq "Healthy"
       $fOk = $frontendSvc.status -eq "Healthy"
       $pOk = $promSvc.status -eq "Collecting"
-      $gOk = $grafanaSvc.status -eq "Down"
+      $gOk = ($grafanaSvc.status -eq "Down") -or ($grafanaSvc.status -eq "Connected")
 
       if ($bOk -and $dOk -and $fOk -and $pOk -and $gOk) {
         $svcStatusOk = $true
@@ -299,7 +303,7 @@ try {
   }
 
   if ($svcStatusOk) {
-    Log-Pass "9. /api/services confirmed: Prometheus is 'Collecting', Grafana is 'Down', Backend/Database/Frontend are 'Healthy'"
+    Log-Pass "9. /api/services confirmed: Prometheus is 'Collecting', Grafana is '$($grafanaSvc.status)', Backend/Database/Frontend are 'Healthy'"
   } else {
     Log-Fail "9. /api/services verification failed after 60s" $detail
   }

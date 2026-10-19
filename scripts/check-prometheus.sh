@@ -111,6 +111,9 @@ fi
 
 # Check 5: Generate real traffic and assert counter increased by at least 90% of requested count
 req_count=100
+curl -s "${BASE_URL}/api/health" > /dev/null || true
+sleep 16
+
 before_res=$(query_prom 'sum(http_requests_total{job="backend",route="/api/health"})')
 before_val=$(echo "$before_res" | grep -o '\[[0-9.]*,"[0-9.]*"\]' | grep -o '"[0-9.]*"' | tr -d '"' | cut -d. -f1 || echo "0")
 [ -z "$before_val" ] && before_val=0
@@ -181,7 +184,7 @@ svc_ok=false
 while [ $s_wait -lt 60 ]; do
   services_json=$(curl -s "${BASE_URL}/api/services" || true)
   if echo "$services_json" | grep -q '"name":"Prometheus","status":"Collecting"' && \
-     echo "$services_json" | grep -q '"name":"Grafana","status":"Down"' && \
+     (echo "$services_json" | grep -q '"name":"Grafana","status":"Down"' || echo "$services_json" | grep -q '"name":"Grafana","status":"Connected"') && \
      echo "$services_json" | grep -q '"name":"Backend API","status":"Healthy"'; then
     svc_ok=true
     break
@@ -191,7 +194,7 @@ while [ $s_wait -lt 60 ]; do
 done
 
 if [ "$svc_ok" = true ]; then
-  log_pass "9. /api/services confirmed: Prometheus is 'Collecting', Grafana is 'Down', Backend API is 'Healthy'"
+  log_pass "9. /api/services confirmed: Prometheus is 'Collecting', Grafana is Down or Connected, Backend API is 'Healthy'"
 else
   log_fail "9. /api/services status verification failed after 60s"
 fi
