@@ -28,19 +28,16 @@ const tourSteps: StepInfo[] = [
 ];
 
 export const OnboardingTour: React.FC = () => {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState<boolean>(() => {
+    try {
+      return !localStorage.getItem(TOUR_STORAGE_KEY);
+    } catch {
+      return false;
+    }
+  });
   const [stepIndex, setStepIndex] = useState<number>(-1); // -1 = Welcome Modal, 0..2 = Tour Steps
 
   useEffect(() => {
-    try {
-      const completed = localStorage.getItem(TOUR_STORAGE_KEY);
-      if (!completed) {
-        setIsOpen(true);
-      }
-    } catch {
-      // LocalStorage unavailable, silent fallback
-    }
-
     const handleReset = () => {
       setStepIndex(-1);
       setIsOpen(true);
