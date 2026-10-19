@@ -1,0 +1,49 @@
+# prometheus/prometheus.yml
+# ==============================================================================
+# Prometheus Configuration File for DevMonitor
+# ==============================================================================
+# In Prometheus, monitoring is pull-based (or "scraping"):
+# - A "scrape" means Prometheus makes an HTTP GET request to a target endpoint
+#   (by default at /metrics) at regular intervals to collect metric measurements.
+# - Targets do NOT push metrics to Prometheus; Prometheus reaches out to them.
+#
+# Docker DNS Resolution:
+# - Targets specify Docker service names (e.g., 'backend:5000', 'node-exporter:9100')
+#   rather than 'localhost'. In Docker Compose, each container has its own network
+#   namespace where 'localhost' refers only to that specific container. Docker's
+#   built-in DNS server automatically resolves container names to their internal IPs.
+#
+# Label Notice:
+# - We do NOT define any custom target labels named 'service' or override 'job'.
+#   The DevMonitor backend exports a custom metric called 'devmonitor_service_up'
+#   that already uses a 'service' label. Adding a target label named 'service' would
+#   collide and cause Prometheus to rename the metric's own label to 'exported_service'.
+# ==============================================================================
+
+global:
+  # How frequently Prometheus pulls metrics from configured targets
+  scrape_interval: 15s
+  # How frequently Prometheus evaluates recording and alerting rules
+  evaluation_interval: 15s
+
+# Rule files (recording rules and alerting rules) are out of scope for this stage.
+# Alertmanager configuration and alerting rules will be added in a future phase.
+# rule_files:
+# alerting:
+
+scrape_configs:
+  # Job 1: Prometheus monitoring its own runtime performance and TSDB storage
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Job 2: DevMonitor Express Backend API & application metrics
+  - job_name: "backend"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["backend:5000"]
+
+  # Job 3: Node Exporter host machine hardware and OS telemetry
+  - job_name: "node"
+    static_configs:
+      - targets: ["node-exporter:9100"]
