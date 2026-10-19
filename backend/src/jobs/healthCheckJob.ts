@@ -2,6 +2,7 @@ import http from 'node:http';
 import https from 'node:https';
 import { config } from '../config/env.js';
 import { query, isDatabaseAlive } from '../db/pool.js';
+import { devmonitorServiceUp } from '../services/metricsService.js';
 import type { ServiceStatus } from '../types/index.js';
 
 let intervalId: NodeJS.Timeout | null = null;
@@ -44,6 +45,8 @@ export async function runHealthCheckCycle(): Promise<void> {
   try {
     // 1. Check Database
     const dbAlive = await isDatabaseAlive();
+    devmonitorServiceUp.set({ service: 'Database' }, dbAlive ? 1 : 0);
+
     if (!dbAlive) {
       cyclePassed = false;
       await query("UPDATE services SET status = 'Down' WHERE name = 'Database'").catch(() => {});
@@ -70,9 +73,11 @@ export async function runHealthCheckCycle(): Promise<void> {
         } else {
           newStatus = 'Healthy';
         }
+        devmonitorServiceUp.set({ service: s.name }, 1);
       } else {
         cyclePassed = false;
         newStatus = 'Down';
+        devmonitorServiceUp.set({ service: s.name }, 0);
       }
 
       await query('UPDATE services SET status = $1 WHERE id = $2', [newStatus, s.id]);
@@ -88,6 +93,12 @@ export async function runHealthCheckCycle(): Promise<void> {
 }
 
 export function startHealthCheckJob(): void {
+  // Initialize default service up series
+  devmonitorServiceUp.set({ service: 'Backend API' }, 1);
+  devmonitorServiceUp.set({ service: 'Database' }, 0);
+  devmonitorServiceUp.set({ service: 'Prometheus' }, 0);
+  devmonitorServiceUp.set({ service: 'Grafana' }, 0);
+
   // Run once shortly after boot, then every interval
   setTimeout(() => {
     runHealthCheckCycle();

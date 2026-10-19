@@ -1,5 +1,9 @@
 import pg from 'pg';
 import { config } from '../config/env.js';
+import {
+  devmonitorDbQueriesTotal,
+  devmonitorDbQueryDurationSeconds,
+} from '../services/metricsService.js';
 
 const { Pool } = pg;
 
@@ -34,15 +38,26 @@ export async function query<R extends pg.QueryResultRow = pg.QueryResultRow>(
   try {
     const res = await rawPool.query<R>(text, params);
     const duration = performance.now() - start;
+
     totalQueryCount += 1;
     totalQueryDurationMs += duration;
     isConnected = true;
+
+    // Observe Prometheus DB query metrics
+    devmonitorDbQueriesTotal.inc();
+    devmonitorDbQueryDurationSeconds.observe(duration / 1000);
+
     return res;
   } catch (error) {
     const duration = performance.now() - start;
+
     totalQueryCount += 1;
     totalQueryDurationMs += duration;
     isConnected = false;
+
+    devmonitorDbQueriesTotal.inc();
+    devmonitorDbQueryDurationSeconds.observe(duration / 1000);
+
     throw error;
   }
 }

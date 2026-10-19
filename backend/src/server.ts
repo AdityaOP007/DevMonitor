@@ -29,7 +29,11 @@ import { startAlertEvaluatorJob, stopAlertEvaluatorJob } from './jobs/alertEvalu
 
 const app = express();
 
-// 1. Cross-Origin Resource Sharing
+// 1. Dedicated Prometheus Scrape Target
+// Mounted first: no CORS requirement, no rate-limiting, no body parser or simulation interference
+app.use('/metrics', metricsRouter);
+
+// 2. Cross-Origin Resource Sharing for API routes
 app.use(
   cors({
     origin: config.corsOrigin,
@@ -38,20 +42,19 @@ app.use(
   })
 );
 
-// 2. Body Parser with 10kb limit
+// 3. Body Parser with 10kb limit
 app.use(express.json({ limit: '10kb' }));
 
-// 3. Request Logger
+// 4. Request Logger
 app.use(requestLogger);
 
-// 4. Prometheus Metrics Collection Middleware
+// 5. Prometheus Metrics Collection Middleware (instruments /api routes)
 app.use(metricsMiddleware);
 
-// 5. Simulation Control Middleware
+// 6. Simulation Control Middleware
 app.use(simulationMiddleware);
 
-// 6. Routes
-app.use('/metrics', metricsRouter);
+// 7. API Routes
 app.use('/api/health', healthRouter);
 app.use('/api/server', serverRouter);
 app.use('/api/dashboard', dashboardRouter);
@@ -63,7 +66,7 @@ app.use('/api/alerts', alertsRouter);
 app.use('/api/monitor', monitorRouter);
 app.use('/api/test', testRouter);
 
-// 7. 404 & Central Error Handlers
+// 8. 404 & Central Error Handlers
 app.use(notFoundHandler);
 app.use(errorHandler);
 
@@ -87,9 +90,10 @@ async function startServer(): Promise<void> {
   startHealthCheckJob();
   startAlertEvaluatorJob();
 
-  const server = app.listen(config.port, () => {
-    console.log(`[DevMonitor Backend] Running on http://localhost:${config.port}`);
-    console.log(`[DevMonitor Backend] Metrics available at http://localhost:${config.port}/metrics`);
+  // Listen explicitly on 0.0.0.0 for container networking
+  const server = app.listen(config.port, '0.0.0.0', () => {
+    console.log(`[DevMonitor Backend] Running on http://0.0.0.0:${config.port}`);
+    console.log(`[DevMonitor Backend] Metrics available at http://0.0.0.0:${config.port}/metrics`);
   });
 
   // Graceful shutdown
