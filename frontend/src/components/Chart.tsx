@@ -9,7 +9,7 @@ import {
   Tooltip,
 } from 'recharts';
 
-interface ChartProps<T extends Record<string, string | number>> {
+interface ChartProps<T extends object> {
   title: string;
   subtitle?: string;
   data: T[];
@@ -20,7 +20,7 @@ interface ChartProps<T extends Record<string, string | number>> {
   height?: number;
 }
 
-export function Chart<T extends Record<string, string | number>>({
+export function Chart<T extends object>({
   title,
   subtitle,
   data,
