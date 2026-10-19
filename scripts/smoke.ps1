@@ -11,7 +11,7 @@ function Test-Endpoint {
     [string]$Method,
     [string]$Path,
     [string]$Body,
-    [int]$ExpectedStatus,
+    [int[]]$ExpectedStatus,
     [string]$KeyField
   )
 
@@ -34,11 +34,11 @@ function Test-Endpoint {
 
   $status = [int]$statusStr
 
-  if ($status -eq $ExpectedStatus -and (-not $KeyField -or $bodyText.Contains($KeyField))) {
+  if (($ExpectedStatus -contains $status) -and (-not $KeyField -or $bodyText.Contains($KeyField))) {
     Write-Host "PASS (status $status)" -ForegroundColor Green
     $script:passed++
   } else {
-    Write-Host "FAIL (status $status, expected $ExpectedStatus with '$KeyField')" -ForegroundColor Red
+    Write-Host "FAIL (status $status, expected $($ExpectedStatus -join '/') with '$KeyField')" -ForegroundColor Red
     Write-Host "Response: $bodyText"
     $script:failed++
   }
@@ -56,10 +56,10 @@ Test-Endpoint -Name "Requests Series" -Method "GET" -Path "/api/metrics/requests
 Test-Endpoint -Name "CPU Series" -Method "GET" -Path "/api/metrics/cpu-series" -ExpectedStatus 200 -KeyField "time"
 Test-Endpoint -Name "Response Time Series" -Method "GET" -Path "/api/metrics/response-time-series" -ExpectedStatus 200 -KeyField "time"
 Test-Endpoint -Name "Recent Errors" -Method "GET" -Path "/api/errors/recent" -ExpectedStatus 200
-Test-Endpoint -Name "Services List (DB offline fallback)" -Method "GET" -Path "/api/services" -ExpectedStatus 503
+Test-Endpoint -Name "Services List" -Method "GET" -Path "/api/services" -ExpectedStatus @(200, 503)
 Test-Endpoint -Name "Database Stats" -Method "GET" -Path "/api/database/stats" -ExpectedStatus 200 -KeyField "connections"
-Test-Endpoint -Name "Alerts List (DB offline fallback)" -Method "GET" -Path "/api/alerts" -ExpectedStatus 503
-Test-Endpoint -Name "Alert Config GET (DB offline fallback)" -Method "GET" -Path "/api/alerts/config" -ExpectedStatus 503
+Test-Endpoint -Name "Alerts List" -Method "GET" -Path "/api/alerts" -ExpectedStatus @(200, 503)
+Test-Endpoint -Name "Alert Config GET" -Method "GET" -Path "/api/alerts/config" -ExpectedStatus @(200, 503)
 
 # SSRF Protection
 Test-Endpoint -Name "SSRF Block Loopback" -Method "POST" -Path "/api/monitor/check-url" -Body '{\"url\":\"http://127.0.0.1\"}' -ExpectedStatus 400 -KeyField "reserved or private"

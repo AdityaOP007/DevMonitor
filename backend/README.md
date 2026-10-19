@@ -198,14 +198,79 @@ docker run --name devmonitor-pg -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=dev
 
 ---
 
+## Prometheus Scraping
+
+DevMonitor exposes an unauthenticated, zero-overhead Prometheus pull target compliant with Prometheus exposition format standards.
+
+- **Scrape Target:** `backend:5000` (inside Docker Compose networking) or `localhost:5000` (local development)
+- **Path:** `/metrics`
+- **Recommended Scrape Interval:** `15s`
+- **Isolation Guarantee:** `/metrics` is mounted ahead of application middleware; it is immune to slow/error/stop simulation modes, rate limiters, or database latency timeouts (max 2s probe timeout with safe fallback). Scraping `/metrics` does not increment application traffic counters or latency histograms.
+
+### Custom Metrics Reference
+
+| Metric Name | Type | Labels | Plain Language Meaning |
+|---|---|---|---|
+| `http_requests_total` | Counter | `method`, `route`, `status_code` | Total HTTP requests handled by the server (excluding `/metrics`). |
+| `http_errors_total` | Counter | `method`, `route`, `status_code` | Total HTTP 5xx server errors produced by the application. |
+| `http_request_duration_seconds` | Histogram | `method`, `route`, `status_code` | HTTP request execution duration in seconds (buckets: 5ms to 5s). |
+| `http_active_requests` | Gauge | (none) | Number of HTTP requests currently in flight being processed. |
+| `devmonitor_db_up` | Gauge | (none) | PostgreSQL database connectivity status (1 = reachable, 0 = unreachable). |
+| `devmonitor_db_connections` | Gauge | (none) | Current active client connections to the PostgreSQL database. |
+| `devmonitor_db_queries_total` | Counter | (none) | Total SQL queries executed through the application pool wrapper. |
+| `devmonitor_db_query_duration_seconds` | Histogram | (none) | Duration of queries executed through the pool wrapper (buckets: 1ms to 1s). |
+| `devmonitor_db_size_bytes` | Gauge | (none) | Current PostgreSQL database disk usage size in bytes (`pg_database_size`). |
+| `devmonitor_service_up` | Gauge | `service` | Health check probe status for monitored services (1 = operational, 0 = down). |
+| `devmonitor_simulation_active` | Gauge | `mode` | Active state of failure simulator modes (`errors`, `slow`, `cpu`, `down`). |
+
+*(Note: Standard Node.js process and memory metrics such as `process_cpu_user_seconds_total` and `process_resident_memory_bytes` are also exposed via `client.collectDefaultMetrics`.)*
+
+### Example Prometheus Scrape Configuration (Documentation Only)
+
+```yaml
+scrape_configs:
+  - job_name: "backend"
+    scrape_interval: 15s
+    static_configs:
+      - targets: ["backend:5000"]
+```
+
+### Dashboard PromQL Queries
+
+The planned Grafana dashboards use these fundamental queries:
+
+1. **Request Rate (req/s):**
+   ```promql
+   sum(rate(http_requests_total[2m]))
+   ```
+   *Measures the per-second rate of incoming HTTP requests across all endpoints averaged over a 2-minute window.*
+
+2. **Error Percentage (%):**
+   ```promql
+   (sum(rate(http_errors_total[2m])) / sum(rate(http_requests_total[2m]))) * 100
+   ```
+   *Measures the ratio of 5xx server error responses to total HTTP traffic as a percentage over 2 minutes.*
+
+3. **95th Percentile Response Time (Latency):**
+   ```promql
+   histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[2m])) by (le))
+   ```
+   *Estimates the maximum latency in seconds experienced by the fastest 95% of requests.*
+
+---
+
 ## Running Smoke Tests
 
 Run the automated test suite against the running server:
 
 ```bash
-# Bash:
+# Metrics scrape & format compliance check:
+npm run check:metrics
+
+# Bash smoke test:
 bash scripts/smoke.sh
 
-# PowerShell:
-pwsh scripts/smoke.ps1
+# PowerShell smoke test:
+powershell -ExecutionPolicy Bypass -File scripts/smoke.ps1
 ```
+
