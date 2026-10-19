@@ -2,62 +2,62 @@ import { query, closePool } from './pool.js';
 import { config } from '../config/env.js';
 
 export async function runSeeds(): Promise<void> {
-  // Check and seed services
-  const existingServices = await query('SELECT COUNT(*) as count FROM services');
-  const serviceCount = parseInt(existingServices.rows[0].count, 10);
+  const services = [
+    {
+      name: 'Backend API',
+      status: 'UNKNOWN',
+      url: config.backendHealthUrl,
+      role: 'Serves the dashboard data and exposes metrics',
+    },
+    {
+      name: 'Database',
+      status: 'UNKNOWN',
+      url: null,
+      role: "Stores the application's own data",
+    },
+    {
+      name: 'Frontend',
+      status: 'UNKNOWN',
+      url: config.frontendUrl,
+      role: 'The React dashboard people open in the browser',
+    },
+    {
+      name: 'Prometheus',
+      status: 'UNKNOWN',
+      url: config.prometheusUrl,
+      role: 'Collects and stores metrics',
+    },
+    {
+      name: 'Grafana',
+      status: 'UNKNOWN',
+      url: config.grafanaUrl,
+      role: 'Draws graphs and dashboards',
+    },
+  ];
 
-  if (serviceCount === 0) {
-    const services = [
-      {
-        name: 'Backend API',
-        status: 'Healthy',
-        url: `http://localhost:${config.port}/api/health`,
-        role: 'Processes application requests and business logic',
-      },
-      {
-        name: 'Database',
-        status: 'Healthy',
-        url: null,
-        role: 'PostgreSQL storage for persistent data',
-      },
-      {
-        name: 'Prometheus',
-        status: 'Collecting',
-        url: 'http://localhost:9090',
-        role: 'Scrapes /metrics endpoint every 15 seconds',
-      },
-      {
-        name: 'Grafana',
-        status: 'Connected',
-        url: 'http://localhost:3000',
-        role: 'Visualizes historical metrics and time-series',
-      },
-    ];
-
-    for (const s of services) {
-      await query(
-        'INSERT INTO services (name, status, url, role) VALUES ($1, $2, $3, $4)',
-        [s.name, s.status, s.url, s.role]
-      );
-    }
-    console.log(`[DB Seed] Inserted ${services.length} default services.`);
-  }
-
-  // Check and seed alert_config
-  const existingConfig = await query('SELECT COUNT(*) as count FROM alert_config');
-  const configCount = parseInt(existingConfig.rows[0].count, 10);
-
-  if (configCount === 0) {
+  for (const s of services) {
+    // Idempotent: Never overwrite rows that exist or were edited by a user
     await query(
-      `INSERT INTO alert_config (id, cpu_threshold, memory_threshold, error_rate_threshold, response_time_threshold, duration_minutes)
-       VALUES (1, $1, $2, $3, $4, $5)`,
-      [80, 85, 5, 300, 5]
+      `INSERT INTO services (name, status, url, role)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (name) DO NOTHING`,
+      [s.name, s.status, s.url, s.role],
+      { internal: true }
     );
-    console.log('[DB Seed] Inserted default alert config.');
   }
+  console.log('[DB Seed] Seeded default services (idempotent ON CONFLICT DO NOTHING).');
+
+  // Seed default alert_config row only if absent
+  await query(
+    `INSERT INTO alert_config (id, cpu_threshold, memory_threshold, error_rate_threshold, response_time_threshold, duration_minutes)
+     VALUES (1, 80, 85, 5, 300, 5)
+     ON CONFLICT (id) DO NOTHING`,
+    [],
+    { internal: true }
+  );
+  console.log('[DB Seed] Ensured default alert configuration row.');
 }
 
-// Allow direct CLI execution
 if (process.argv[1] && process.argv[1].endsWith('seed.ts')) {
   runSeeds()
     .then(async () => {

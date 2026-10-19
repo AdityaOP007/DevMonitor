@@ -1,3 +1,6 @@
+-- 001_initial.sql
+-- Baseline initial schema (matches previous schema.sql for backward compatibility)
+
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,

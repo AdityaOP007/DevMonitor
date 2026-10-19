@@ -3,7 +3,7 @@ import cors from 'cors';
 import { config } from './config/env.js';
 import { runMigrations } from './db/migrate.js';
 import { runSeeds } from './db/seed.js';
-import { closePool, isDatabaseAlive } from './db/pool.js';
+import { closePool, isDatabaseAlive, startBackgroundConnectionCheck } from './db/pool.js';
 
 import { requestLogger } from './middleware/requestLogger.js';
 import { metricsMiddleware } from './middleware/metricsMiddleware.js';
@@ -20,6 +20,7 @@ import { errorsRouter } from './routes/errors.js';
 import { servicesRouter } from './routes/services.js';
 import { databaseRouter } from './routes/database.js';
 import { alertsRouter } from './routes/alerts.js';
+import { usersRouter } from './routes/users.js';
 import { monitorRouter } from './routes/monitor.js';
 import { testRouter } from './routes/test.js';
 
@@ -29,8 +30,7 @@ import { startAlertEvaluatorJob, stopAlertEvaluatorJob } from './jobs/alertEvalu
 
 const app = express();
 
-// 1. Dedicated Prometheus Scrape Target
-// Mounted first: no CORS requirement, no rate-limiting, no body parser or simulation interference
+// 1. Dedicated Prometheus Scrape Target (mounted ahead of application middleware)
 app.use('/metrics', metricsRouter);
 
 // 2. Cross-Origin Resource Sharing for API routes
@@ -63,6 +63,7 @@ app.use('/api/errors', errorsRouter);
 app.use('/api/services', servicesRouter);
 app.use('/api/database', databaseRouter);
 app.use('/api/alerts', alertsRouter);
+app.use('/api/users', usersRouter);
 app.use('/api/monitor', monitorRouter);
 app.use('/api/test', testRouter);
 
@@ -72,6 +73,9 @@ app.use(errorHandler);
 
 // Bootstrap Server & DB Initialization
 async function startServer(): Promise<void> {
+  // Start background connection check probe
+  startBackgroundConnectionCheck();
+
   // Attempt DB migrations and seeding; remain resilient if DB is briefly offline
   try {
     const dbAvailable = await isDatabaseAlive();
@@ -113,7 +117,6 @@ async function startServer(): Promise<void> {
       process.exit(0);
     });
 
-    // Force exit after 5 seconds if hanging
     setTimeout(() => {
       console.error('[Shutdown] Forceful exit timed out.');
       process.exit(1);

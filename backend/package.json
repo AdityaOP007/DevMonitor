@@ -10,8 +10,11 @@
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "check:metrics": "tsx scripts/check-metrics.ts",
+    "check:db": "tsx scripts/check-db.ts",
     "db:migrate": "tsx src/db/migrate.ts",
-    "db:seed": "tsx src/db/seed.ts"
+    "db:status": "tsx src/db/migrate.ts --status",
+    "db:seed": "tsx src/db/seed.ts",
+    "db:reset": "tsx src/db/reset.ts"
   },
   "dependencies": {
     "cors": "^2.8.5",

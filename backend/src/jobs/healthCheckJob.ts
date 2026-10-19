@@ -3,7 +3,6 @@ import https from 'node:https';
 import { config } from '../config/env.js';
 import { query, isDatabaseAlive } from '../db/pool.js';
 import { devmonitorServiceUp } from '../services/metricsService.js';
-import type { ServiceStatus } from '../types/index.js';
 
 let intervalId: NodeJS.Timeout | null = null;
 let totalRuns = 0;
@@ -47,40 +46,38 @@ export async function runHealthCheckCycle(): Promise<void> {
     const dbAlive = await isDatabaseAlive();
     devmonitorServiceUp.set({ service: 'Database' }, dbAlive ? 1 : 0);
 
-    if (!dbAlive) {
-      cyclePassed = false;
-      await query("UPDATE services SET status = 'Down' WHERE name = 'Database'").catch(() => {});
-    } else {
-      await query("UPDATE services SET status = 'Healthy' WHERE name = 'Database'").catch(() => {});
-    }
+    const dbStatus = dbAlive ? 'UP' : 'DOWN';
+    if (!dbAlive) cyclePassed = false;
 
-    // 2. Check HTTP Services (Backend API, Prometheus, Grafana)
+    await query(
+      'UPDATE services SET status = $1, last_checked_at = NOW() WHERE name = $2',
+      [dbStatus, 'Database'],
+      { internal: true }
+    ).catch(() => {});
+
+    // 2. Check HTTP Services (Backend API, Frontend, Prometheus, Grafana)
     const result = await query<{ id: number; name: string; url: string | null }>(
-      'SELECT id, name, url FROM services WHERE url IS NOT NULL'
+      'SELECT id, name, url FROM services WHERE url IS NOT NULL',
+      [],
+      { internal: true }
     );
 
     for (const s of result.rows) {
       if (!s.url) continue;
 
       const reachable = await probeUrl(s.url);
-      let newStatus: ServiceStatus = 'Down';
+      const canonicalStatus = reachable ? 'UP' : 'DOWN';
+      devmonitorServiceUp.set({ service: s.name }, reachable ? 1 : 0);
 
-      if (reachable) {
-        if (s.name === 'Prometheus') {
-          newStatus = 'Collecting';
-        } else if (s.name === 'Grafana') {
-          newStatus = 'Connected';
-        } else {
-          newStatus = 'Healthy';
-        }
-        devmonitorServiceUp.set({ service: s.name }, 1);
-      } else {
+      if (!reachable) {
         cyclePassed = false;
-        newStatus = 'Down';
-        devmonitorServiceUp.set({ service: s.name }, 0);
       }
 
-      await query('UPDATE services SET status = $1 WHERE id = $2', [newStatus, s.id]);
+      await query(
+        'UPDATE services SET status = $1, last_checked_at = NOW() WHERE id = $2',
+        [canonicalStatus, s.id],
+        { internal: true }
+      );
     }
   } catch (error) {
     cyclePassed = false;
@@ -96,6 +93,7 @@ export function startHealthCheckJob(): void {
   // Initialize default service up series
   devmonitorServiceUp.set({ service: 'Backend API' }, 1);
   devmonitorServiceUp.set({ service: 'Database' }, 0);
+  devmonitorServiceUp.set({ service: 'Frontend' }, 0);
   devmonitorServiceUp.set({ service: 'Prometheus' }, 0);
   devmonitorServiceUp.set({ service: 'Grafana' }, 0);
 

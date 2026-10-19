@@ -9,6 +9,13 @@ export interface Config {
   sampleIntervalSeconds: number;
   healthCheckIntervalSeconds: number;
   testMaxRequests: number;
+  dbPoolMax: number;
+  dbIdleTimeoutMs: number;
+  dbConnectionTimeoutMs: number;
+  backendHealthUrl: string;
+  frontendUrl: string;
+  prometheusUrl: string;
+  grafanaUrl: string;
 }
 
 function loadConfig(): Config {
@@ -24,6 +31,15 @@ function loadConfig(): Config {
   const healthCheckIntervalSeconds = parseInt(process.env.HEALTH_CHECK_INTERVAL_SECONDS || '30', 10);
   const testMaxRequests = parseInt(process.env.TEST_MAX_REQUESTS || '1000', 10);
 
+  const dbPoolMax = parseInt(process.env.DB_POOL_MAX || '10', 10);
+  const dbIdleTimeoutMs = parseInt(process.env.DB_IDLE_TIMEOUT_MS || '30000', 10);
+  const dbConnectionTimeoutMs = parseInt(process.env.DB_CONNECTION_TIMEOUT_MS || '5000', 10);
+
+  const backendHealthUrl = process.env.BACKEND_HEALTH_URL || `http://localhost:${port}/api/health`;
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const prometheusUrl = process.env.PROMETHEUS_URL || 'http://localhost:9090/-/healthy';
+  const grafanaUrl = process.env.GRAFANA_URL || 'http://localhost:3000/api/health';
+
   return {
     port,
     databaseUrl,
@@ -32,6 +48,13 @@ function loadConfig(): Config {
     sampleIntervalSeconds,
     healthCheckIntervalSeconds,
     testMaxRequests,
+    dbPoolMax,
+    dbIdleTimeoutMs,
+    dbConnectionTimeoutMs,
+    backendHealthUrl,
+    frontendUrl,
+    prometheusUrl,
+    grafanaUrl,
   };
 }
 

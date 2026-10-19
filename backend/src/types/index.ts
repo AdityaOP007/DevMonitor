@@ -98,3 +98,10 @@ export interface TestActionResponse {
   message: string;
   sent?: number;
 }
+
+export interface UserItem {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: string;
+}

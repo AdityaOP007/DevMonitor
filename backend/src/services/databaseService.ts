@@ -8,15 +8,19 @@ export async function getDatabaseStats(): Promise<DatabaseStats> {
   let databaseSize = '0 MB';
 
   try {
-    // 1. Get real active connections count from pg_stat_activity
+    // 1. Get real active connections count from pg_stat_activity (internal query)
     const connRes = await query<{ count: string }>(
-      'SELECT COUNT(*) as count FROM pg_stat_activity WHERE state IS NOT NULL'
+      'SELECT COUNT(*) as count FROM pg_stat_activity WHERE state IS NOT NULL',
+      [],
+      { internal: true }
     );
     connections = parseInt(connRes.rows[0]?.count || '1', 10);
 
-    // 2. Get real database size on disk via PostgreSQL pg_size_pretty
+    // 2. Get real database size on disk via PostgreSQL pg_size_pretty (internal query)
     const sizeRes = await query<{ size: string }>(
-      'SELECT pg_size_pretty(pg_database_size(current_database())) as size'
+      'SELECT pg_size_pretty(pg_database_size(current_database())) as size',
+      [],
+      { internal: true }
     );
     databaseSize = sizeRes.rows[0]?.size || '1.2 MB';
   } catch (err) {

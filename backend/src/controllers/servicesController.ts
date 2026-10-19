@@ -9,14 +9,28 @@ interface RawServiceRow {
   role: string | null;
 }
 
+/**
+ * Maps database canonical status (UP/DOWN/UNKNOWN) to the frontend's ServiceStatus display values.
+ */
+export function mapCanonicalStatusToDisplay(name: string, canonicalStatus: string): ServiceStatus {
+  if (canonicalStatus === 'UP') {
+    if (name === 'Prometheus') return 'Collecting';
+    if (name === 'Grafana') return 'Connected';
+    return 'Healthy';
+  }
+  return 'Down';
+}
+
 export async function getServicesHandler(_req: Request, res: Response): Promise<void> {
   try {
-    const result = await query<RawServiceRow>('SELECT id, name, status, role FROM services ORDER BY id ASC');
+    const result = await query<RawServiceRow>(
+      'SELECT id, name, status, role FROM services ORDER BY id ASC'
+    );
 
     const services: ServiceItem[] = result.rows.map((row) => ({
       id: String(row.id),
       name: row.name,
-      status: row.status as ServiceStatus,
+      status: mapCanonicalStatusToDisplay(row.name, row.status),
       role: row.role || '',
     }));
 
