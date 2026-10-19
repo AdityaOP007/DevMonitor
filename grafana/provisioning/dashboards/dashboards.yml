@@ -1,0 +1,14 @@
+# grafana/provisioning/dashboards/dashboards.yml
+apiVersion: 1
+
+providers:
+  - name: DevMonitor
+    orgId: 1
+    folder: DevMonitor
+    type: file
+    disableDeletion: false
+    editable: false
+    options:
+      path: /var/lib/grafana/dashboards
+    updateIntervalSeconds: 30
+    allowUiUpdates: false

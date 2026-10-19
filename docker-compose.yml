@@ -154,12 +154,53 @@ services:
     networks:
       - devmonitor
 
+  # 6. Grafana Visualization & Dashboarding Service
+  grafana:
+    image: grafana/grafana-oss:11.5.2
+    container_name: devmonitor-grafana
+    restart: unless-stopped
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/devmonitor-application.json
+    ports:
+      # Published strictly to loopback (127.0.0.1) for local host access.
+      # Grafana must NEVER be published publicly without HTTPS and proper authentication.
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    networks:
+      - devmonitor
+
 volumes:
   postgres_data:
     name: devmonitor_postgres_data
   prometheus_data:
     name: devmonitor_prometheus_data
+  grafana_data:
+    name: devmonitor_grafana_data
 
 networks:
   devmonitor:
     name: devmonitor
+
