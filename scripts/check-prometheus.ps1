@@ -142,22 +142,32 @@ try {
   Log-Fail "4. Query 'up' threw exception: $($_.Exception.Message)"
 }
 
-# Check 5: Generate real traffic and assert http_requests_total increase > 0
+# Check 5: Generate real traffic and assert counter increased by at least 90% of requested count
 try {
-  $loadRes = Invoke-RestMethod -Method Post -Uri "$BaseUrl/api/test/load" -ContentType "application/json" -Body (@{count=100} | ConvertTo-Json)
+  $requestedCount = 100
+  $beforeCount = 0
+  try {
+    $beforeRes = Query-Prometheus 'sum(http_requests_total{job="backend",route="/api/health"})'
+    if ($beforeRes.data.result.Count -gt 0) {
+      $beforeCount = [double]$beforeRes.data.result[0].value[1]
+    }
+  } catch {}
+
+  $loadRes = Invoke-RestMethod -Method Post -Uri "$BaseUrl/api/test/load" -ContentType "application/json" -Body (@{count=$requestedCount} | ConvertTo-Json)
   
   $trafficOk = $false
   $trafficWait = 0
-  $val = 0
+  $diff = 0
 
-  while ($trafficWait -lt 45) {
+  while ($trafficWait -lt 60) {
     Start-Sleep -Seconds 3
     $trafficWait += 3
     try {
-      $incRes = Query-Prometheus "sum(increase(http_requests_total[2m]))"
-      if ($incRes.data.result.Count -gt 0) {
-        $val = [double]$incRes.data.result[0].value[1]
-        if ($val -gt 0) {
+      $afterRes = Query-Prometheus 'sum(http_requests_total{job="backend",route="/api/health"})'
+      if ($afterRes.data.result.Count -gt 0) {
+        $afterCount = [double]$afterRes.data.result[0].value[1]
+        $diff = $afterCount - $beforeCount
+        if ($diff -ge ($requestedCount * 0.9)) {
           $trafficOk = $true
           break
         }
@@ -166,9 +176,9 @@ try {
   }
 
   if ($trafficOk) {
-    Log-Pass "5. Real traffic generated (100 requests); http_requests_total increase > 0 (measured increase: $val)"
+    Log-Pass "5. Real traffic generated ($requestedCount requests); counter increased by at least 90% (measured increase: $diff)"
   } else {
-    Log-Fail "5. Traffic check failed: sum(increase(http_requests_total[2m])) was $val after 45s"
+    Log-Fail "5. Traffic check failed: counter increased by only $diff (< $($requestedCount * 0.9)) after 60s"
   }
 } catch {
   Log-Fail "5. Traffic generation check threw exception: $($_.Exception.Message)"

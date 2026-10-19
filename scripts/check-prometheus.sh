@@ -109,24 +109,33 @@ else
   log_fail "4. Query 'up' returned non-1 value"
 fi
 
-# Check 5: Generate traffic and increase > 0
-curl -s -X POST -H "Content-Type: application/json" -d '{"count":100}' "${BASE_URL}/api/test/load" > /dev/null || true
+# Check 5: Generate real traffic and assert counter increased by at least 90% of requested count
+req_count=100
+before_res=$(query_prom 'sum(http_requests_total{job="backend",route="/api/health"})')
+before_val=$(echo "$before_res" | grep -o '\[[0-9.]*,"[0-9.]*"\]' | grep -o '"[0-9.]*"' | tr -d '"' | cut -d. -f1 || echo "0")
+[ -z "$before_val" ] && before_val=0
+
+curl -s -X POST -H "Content-Type: application/json" -d "{\"count\":$req_count}" "${BASE_URL}/api/test/load" > /dev/null || true
 traffic_ok=false
 traf_wait=0
-while [ $traf_wait -lt 45 ]; do
+diff=0
+while [ $traf_wait -lt 60 ]; do
   sleep 3
   traf_wait=$((traf_wait + 3))
-  inc_res=$(query_prom "sum(increase(http_requests_total[2m]))")
-  if echo "$inc_res" | grep -q '"result":\[{.*"value":\[[0-9.]*,"[1-9]'; then
+  after_res=$(query_prom 'sum(http_requests_total{job="backend",route="/api/health"})')
+  after_val=$(echo "$after_res" | grep -o '\[[0-9.]*,"[0-9.]*"\]' | grep -o '"[0-9.]*"' | tr -d '"' | cut -d. -f1 || echo "0")
+  [ -z "$after_val" ] && after_val=0
+  diff=$((after_val - before_val))
+  if [ $diff -ge 90 ]; then
     traffic_ok=true
     break
   fi
 done
 
 if [ "$traffic_ok" = true ]; then
-  log_pass "5. Real traffic generated (100 requests); http_requests_total increase > 0"
+  log_pass "5. Real traffic generated ($req_count requests); counter increased by at least 90% (measured increase: $diff)"
 else
-  log_fail "5. Traffic check failed after 45s"
+  log_fail "5. Traffic check failed: counter increased by only $diff (< 90) after 60s"
 fi
 
 # Check 6: Duration rate and p95
