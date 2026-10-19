@@ -1,0 +1,7 @@
+# docker-compose.override.example.yml
+# Copy this file to docker-compose.override.yml to expose PostgreSQL to your host machine for development tools.
+# Binds to 127.0.0.1:5433 to avoid port collisions if a local PostgreSQL or dev container is already using 5432.
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5433:5432"

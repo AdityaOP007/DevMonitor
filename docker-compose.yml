@@ -1,0 +1,105 @@
+services:
+  # 1. PostgreSQL Database Service
+  postgres:
+    image: postgres:16-alpine
+    container_name: devmonitor-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-devmonitor}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-devmonitor}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    networks:
+      - devmonitor
+
+  # 2. Express Backend API & Metrics Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: devmonitor-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: 5000
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-devmonitor}
+      CORS_ORIGIN: http://localhost:8080
+      ENABLE_TEST_ENDPOINTS: ${ENABLE_TEST_ENDPOINTS:-true}
+      SAMPLE_INTERVAL_SECONDS: ${SAMPLE_INTERVAL_SECONDS:-15}
+      HEALTH_CHECK_INTERVAL_SECONDS: ${HEALTH_CHECK_INTERVAL_SECONDS:-30}
+      TEST_MAX_REQUESTS: ${TEST_MAX_REQUESTS:-1000}
+      DB_POOL_MAX: ${DB_POOL_MAX:-10}
+      DB_IDLE_TIMEOUT_MS: ${DB_IDLE_TIMEOUT_MS:-30000}
+      DB_CONNECTION_TIMEOUT_MS: ${DB_CONNECTION_TIMEOUT_MS:-5000}
+      # Monitored service probe URLs using Docker Compose internal network service names
+      BACKEND_HEALTH_URL: http://backend:5000/api/health
+      FRONTEND_URL: http://frontend:80
+      PROMETHEUS_URL: http://prometheus:9090/-/healthy
+      GRAFANA_URL: http://grafana:3000/api/health
+    ports:
+      # Published strictly to loopback (127.0.0.1) for host curl and Prometheus scrapes.
+      # /metrics is unauthenticated and must NEVER be exposed publicly on all network interfaces.
+      - "127.0.0.1:5000:5000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5000/metrics').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    networks:
+      - devmonitor
+
+  # 3. React Frontend SPA served via Nginx reverse proxy
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_USE_MOCK: "false"
+    container_name: devmonitor-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+    ports:
+      # Web user interface accessible in the host browser at http://localhost:8080
+      - "8080:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    networks:
+      - devmonitor
+
+volumes:
+  postgres_data:
+    name: devmonitor_postgres_data
+
+networks:
+  devmonitor:
+    name: devmonitor
