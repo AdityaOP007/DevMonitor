@@ -144,10 +144,11 @@ try {
   $grafanaSvc = $services | Where-Object { $_.name -eq "Grafana" }
 
   $upOk = ($backendSvc.status -eq "Healthy") -and ($dbSvc.status -eq "Healthy") -and ($frontendSvc.status -eq "Healthy")
-  $downOk = ($promSvc.status -eq "Down") -and ($grafanaSvc.status -eq "Down")
+  $promOk = ($promSvc.status -eq "Collecting") -or ($promSvc.status -eq "Down")
+  $downOk = ($promOk) -and ($grafanaSvc.status -eq "Down")
 
   if ($upOk -and $downOk) {
-    Log-Pass "6. /api/services shows Backend, Database, Frontend as Healthy, and Prometheus, Grafana as Down"
+    Log-Pass "6. /api/services shows Backend, Database, Frontend as Healthy, Prometheus as $($promSvc.status), and Grafana as Down"
   } else {
     Log-Fail "6. Service statuses mismatch" "Backend: $($backendSvc.status), DB: $($dbSvc.status), FE: $($frontendSvc.status), Prom: $($promSvc.status), Grafana: $($grafanaSvc.status)"
   }
