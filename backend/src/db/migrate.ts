@@ -5,7 +5,16 @@ import { rawPool, closePool, withTransaction } from './pool.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const MIGRATIONS_DIR = path.join(__dirname, 'migrations');
+
+export function getMigrationsDir(): string {
+  const localDir = path.join(__dirname, 'migrations');
+  if (fs.existsSync(localDir)) return localDir;
+  const srcDir = path.join(__dirname, '../../src/db/migrations');
+  if (fs.existsSync(srcDir)) return srcDir;
+  const cwdDir = path.join(process.cwd(), 'src/db/migrations');
+  if (fs.existsSync(cwdDir)) return cwdDir;
+  return localDir;
+}
 
 async function ensureMigrationTable(): Promise<void> {
   await rawPool.query(`
@@ -24,8 +33,9 @@ export async function getMigrationStatus(): Promise<{ applied: string[]; pending
   );
   const appliedSet = new Set(res.rows.map((r) => r.filename));
 
+  const migrationsDir = getMigrationsDir();
   const allFiles = fs
-    .readdirSync(MIGRATIONS_DIR)
+    .readdirSync(migrationsDir)
     .filter((f) => f.endsWith('.sql'))
     .sort();
 
@@ -44,8 +54,9 @@ export async function runMigrations(): Promise<void> {
     return;
   }
 
+  const migrationsDir = getMigrationsDir();
   for (const filename of pending) {
-    const filePath = path.join(MIGRATIONS_DIR, filename);
+    const filePath = path.join(migrationsDir, filename);
     const sql = fs.readFileSync(filePath, 'utf8');
 
     console.log(`[DB Migration] Applying ${filename}...`);
