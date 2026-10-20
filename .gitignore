@@ -18,3 +18,9 @@ npm-debug.log*
 Thumbs.db
 .vscode/
 .idea/
+
+# Alertmanager secrets (never commit actual credentials or webhook tokens)
+alertmanager/secrets/*
+!alertmanager/secrets/README.md
+!alertmanager/secrets/*.example
+

@@ -1,0 +1,97 @@
+# alertmanager/alertmanager.email.example.yml
+# ==============================================================================
+# Alertmanager Configuration: Email (SMTP) + Local Webhook Integration
+# ==============================================================================
+# Routes alerts simultaneously to BOTH:
+#   1. Local Webhook Receiver (http://alert-receiver:8080/webhook)
+#   2. Email Inbox via SMTP (using TLS and authenticated credentials)
+#
+# To enable this configuration:
+#   1. Create alertmanager/secrets/smtp_password with your SMTP provider password
+#   2. Update smarthost, auth_username, from, and to placeholders below
+#   3. Set ALERTMANAGER_CONFIG=alertmanager.email.example.yml in your .env
+#   4. Restart Alertmanager: docker compose up -d alertmanager
+# ==============================================================================
+
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ['alertname', 'instance']
+  group_wait: 10s
+  group_interval: 1m
+  repeat_interval: 4h
+  # Fallback default receiver
+  receiver: 'local-receiver'
+  # Sub-routes: duplicate alerts to both local-receiver and email
+  routes:
+    - receiver: 'local-receiver'
+      continue: true
+    - receiver: 'email'
+
+inhibit_rules:
+  - source_matchers:
+      - alertname = "BackendDown"
+    target_matchers:
+      - alertname =~ "^(HighErrorRate|HighResponseTime)$"
+    equal:
+      - instance
+
+receivers:
+  - name: 'local-receiver'
+    webhook_configs:
+      - url: 'http://alert-receiver:8080/webhook'
+        send_resolved: true
+
+  - name: 'email'
+    email_configs:
+      - to: 'team@example.com'
+        from: 'alerts@example.com'
+        smarthost: 'smtp.example.com:587'
+        auth_username: 'alertmanager-bot@example.com'
+        # Read SMTP password securely from mounted secret file
+        auth_password_file: '/etc/alertmanager/secrets/smtp_password'
+        # Require encrypted TLS connection to the SMTP smarthost
+        require_tls: true
+        send_resolved: true
+        headers:
+          Subject: >-
+            {{ if eq .Status "firing" }}[FIRING:{{ .Alerts.Firing | len }}]{{ else }}[RESOLVED]{{ end }}
+            {{ .CommonAnnotations.summary }}
+        html: >-
+          <!DOCTYPE html>
+          <html>
+          <head><meta charset="utf-8"></head>
+          <body style="font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif; background: #f8fafc; padding: 20px; color: #1e293b;">
+            <h2 style="color: {{ if eq .Status "firing" }}#dc2626{{ else }}#16a34a{{ end }};">
+              {{ if eq .Status "firing" }}FIRING{{ else }}RESOLVED{{ end }}: {{ .CommonAnnotations.summary }}
+            </h2>
+            <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 100%; background: #ffffff; border-color: #cbd5e1;">
+              <thead>
+                <tr style="background: #f1f5f9; text-align: left;">
+                  <th>Alert</th>
+                  <th>Severity</th>
+                  <th>Server</th>
+                  <th>Details</th>
+                  <th>Recommended Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{ range .Alerts }}
+                <tr>
+                  <td><strong>{{ .Labels.alertname }}</strong></td>
+                  <td style="color: {{ if eq .Labels.severity "critical" }}#dc2626{{ else }}#d97706{{ end }}; font-weight: bold; text-transform: uppercase;">
+                    {{ .Labels.severity }}
+                  </td>
+                  <td><code>{{ .Labels.instance }}</code></td>
+                  <td>{{ .Annotations.description }}</td>
+                  <td><em>{{ .Annotations.action }}</em></td>
+                </tr>
+                {{ end }}
+              </tbody>
+            </table>
+            <p style="margin-top: 16px; font-size: 12px; color: #64748b;">
+              Delivered by DevMonitor Alertmanager
+            </p>
+          </body>
+          </html>

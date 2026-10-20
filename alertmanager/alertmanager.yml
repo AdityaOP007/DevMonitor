@@ -1,0 +1,61 @@
+# alertmanager/alertmanager.yml
+# ==============================================================================
+# Alertmanager Configuration: Default (Local Webhook Receiver)
+# ==============================================================================
+# Alertmanager receives alerts evaluated by Prometheus, deduplicates them,
+# groups them by rule and server instance, waits a brief moment to bundle
+# related alerts together, and routes them to notification receivers.
+#
+# This default configuration routes all alerts to our local alert-receiver
+# container (http://alert-receiver:8080/webhook). No external accounts,
+# Slack webhooks, or SMTP credentials are required.
+# ==============================================================================
+
+# Global configuration applied across all receivers
+global:
+  # Default timeout before a notification delivery attempt is considered failed
+  resolve_timeout: 5m
+
+# Routing tree: dictates how alerts are grouped and where they are delivered
+route:
+  # Group alerts by alert rule name and target server instance.
+  # Alerts sharing the same name and server are batched into a single notification.
+  group_by: ['alertname', 'instance']
+
+  # How long to wait before sending the very first notification for a new group.
+  # This 10s buffer allows multiple alerts triggered by the same event to bundle.
+  group_wait: 10s
+
+  # Minimum interval before sending an updated notification for an existing group
+  # when a new alert joins the group or existing ones change state.
+  group_interval: 1m
+
+  # How long to wait before resending an alert that is still actively firing.
+  # Prevents notification fatigue while ensuring ongoing issues are not forgotten.
+  repeat_interval: 4h
+
+  # Default destination receiver for all incoming alerts
+  receiver: 'local-receiver'
+
+# Inhibition rules: suppress downstream symptoms when their root cause is already firing.
+# If the backend is down (BackendDown), it cannot serve requests or return healthy responses,
+# so HighErrorRate and HighResponseTime alerts are silenced to reduce alarm noise.
+inhibit_rules:
+  - source_matchers:
+      - alertname = "BackendDown"
+    target_matchers:
+      - alertname =~ "^(HighErrorRate|HighResponseTime)$"
+    equal:
+      - instance
+
+# Receiver destinations where alert notifications are delivered
+receivers:
+  # Local webhook receiver running in the alert-receiver container
+  - name: 'local-receiver'
+    webhook_configs:
+      - url: 'http://alert-receiver:8080/webhook'
+        # Send a follow-up notification when an alert condition clears
+        send_resolved: true
+        # Timeout for the webhook HTTP request
+        http_config:
+          follow_redirects: true

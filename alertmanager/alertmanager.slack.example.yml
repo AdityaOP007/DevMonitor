@@ -1,0 +1,61 @@
+# alertmanager/alertmanager.slack.example.yml
+# ==============================================================================
+# Alertmanager Configuration: Slack + Local Webhook Integration
+# ==============================================================================
+# Routes alerts simultaneously to BOTH:
+#   1. Local Webhook Receiver (http://alert-receiver:8080/webhook)
+#   2. Slack Workspace Channel (using incoming webhook credentials)
+#
+# To enable this configuration:
+#   1. Create alertmanager/secrets/slack_webhook_url with your webhook URL
+#   2. Set ALERTMANAGER_CONFIG=alertmanager.slack.example.yml in your .env
+#   3. Restart Alertmanager: docker compose up -d alertmanager
+# ==============================================================================
+
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ['alertname', 'instance']
+  group_wait: 10s
+  group_interval: 1m
+  repeat_interval: 4h
+  # Fallback default receiver
+  receiver: 'local-receiver'
+  # Sub-routes: duplicate alerts to both local-receiver and slack
+  routes:
+    - receiver: 'local-receiver'
+      continue: true
+    - receiver: 'slack'
+
+inhibit_rules:
+  - source_matchers:
+      - alertname = "BackendDown"
+    target_matchers:
+      - alertname =~ "^(HighErrorRate|HighResponseTime)$"
+    equal:
+      - instance
+
+receivers:
+  - name: 'local-receiver'
+    webhook_configs:
+      - url: 'http://alert-receiver:8080/webhook'
+        send_resolved: true
+
+  - name: 'slack'
+    slack_configs:
+      - api_url_file: '/etc/alertmanager/secrets/slack_webhook_url'
+        send_resolved: true
+        channel: '#devmonitor-alerts'
+        username: 'DevMonitor AlertBot'
+        title: >-
+          {{ if eq .Status "firing" }}:rotating_light: [FIRING]{{ else }}:white_check_mark: [RESOLVED]{{ end }}
+          {{ .CommonAnnotations.summary }}
+        text: >-
+          {{ range .Alerts }}
+          *Alert:* `{{ .Labels.alertname }}` ({{ .Labels.severity | toUpper }})
+          *Server:* `{{ .Labels.instance }}`
+          *Details:* {{ .Annotations.description }}
+          *Suggested Action:* {{ .Annotations.action }}
+          {{ if eq .Labels.severity "critical" }}:bangbang: *PRIORITY:* Critical outage — inspect immediately!{{ end }}
+          {{ end }}
