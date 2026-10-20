@@ -92,3 +92,31 @@ export interface ApiMetricsOverview {
   responseTime: number;
   throughput: number; // req/sec
 }
+
+export interface ReceiverAlert {
+  status: 'firing' | 'resolved';
+  alertname: string;
+  severity: 'warning' | 'critical' | 'unknown';
+  summary: string;
+  description: string;
+  action: string;
+  instance: string;
+  startsAt: string | null;
+  endsAt: string | null;
+  receivedAt: string;
+  active: boolean;
+}
+
+export interface ReceiverSummary {
+  firingNow: number;
+  resolved: number;
+  total: number;
+}
+
+export interface AlertReceiverResult {
+  reachable: boolean;
+  alerts: ReceiverAlert[];
+  summary: ReceiverSummary;
+  checkedAt: string;
+}
+

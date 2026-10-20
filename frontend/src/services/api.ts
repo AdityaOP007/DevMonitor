@@ -1,6 +1,7 @@
 import type {
   AlertConfig,
   AlertItem,
+  AlertReceiverResult,
   ApiMetricsOverview,
   CpuMetricPoint,
   DatabaseStats,
@@ -14,6 +15,7 @@ import type {
   UrlCheckResult,
 } from '../types';
 import { mockDataService } from './mock';
+import { normalizeReceiverPayload, summarize } from '../utils/alertReceiver';
 
 export const isMockMode = (): boolean => {
   const envVal = import.meta.env.VITE_USE_MOCK;
@@ -237,3 +239,49 @@ export async function simulateRestore(): Promise<{ success: boolean; message: st
   if (!res.ok) throw new Error('Failed to restore system');
   return res.json();
 }
+
+export async function getAlertReceiverAlerts(): Promise<AlertReceiverResult> {
+  if (isMockMode()) {
+    return Promise.resolve(mockDataService.getAlertReceiverAlerts());
+  }
+
+  const defaultUnreachable: AlertReceiverResult = {
+    reachable: false,
+    alerts: [],
+    summary: {
+      firingNow: 0,
+      resolved: 0,
+      total: 0,
+    },
+    checkedAt: new Date().toISOString(),
+  };
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+    const res = await fetch('/receiver/alerts', {
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      return defaultUnreachable;
+    }
+
+    const json: unknown = await res.json();
+    const alerts = normalizeReceiverPayload(json);
+    const summary = summarize(alerts);
+
+    return {
+      reachable: true,
+      alerts,
+      summary,
+      checkedAt: new Date().toISOString(),
+    };
+  } catch {
+    return defaultUnreachable;
+  }
+}
+

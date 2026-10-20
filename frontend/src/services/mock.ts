@@ -1,11 +1,13 @@
 import type {
   AlertConfig,
   AlertItem,
+  AlertReceiverResult,
   ApiMetricsOverview,
   CpuMetricPoint,
   DatabaseStats,
   DashboardMetrics,
   HealthResponse,
+  ReceiverAlert,
   RequestMetricPoint,
   ResponseTimeMetricPoint,
   ServerMetrics,
@@ -343,6 +345,74 @@ export const mockDataService = {
       requestHistory: [...initialRequestHistory],
       cpuHistory: [...initialCpuHistory],
       responseTimeHistory: [...initialResponseTimeHistory],
+    };
+  },
+
+  getAlertReceiverAlerts(): AlertReceiverResult {
+    const alerts: ReceiverAlert[] = [
+      {
+        status: 'firing',
+        alertname: 'BackendDown',
+        severity: 'critical',
+        summary: 'BACKEND DOWN',
+        description: 'BACKEND DOWN | Server: backend:5000 | Duration: 1 minute',
+        action: "Check if the backend container is running with 'docker compose ps'. Look at backend logs with 'docker compose logs backend'.",
+        instance: 'backend:5000',
+        startsAt: new Date(Date.now() - 300000).toISOString(),
+        endsAt: null,
+        receivedAt: new Date(Date.now() - 240000).toISOString(),
+        active: true,
+      },
+      {
+        status: 'firing',
+        alertname: 'HighCpuUsage',
+        severity: 'warning',
+        summary: 'HIGH CPU USAGE',
+        description: 'HIGH CPU USAGE | Server: node-exporter:9100 | CPU: 89% | Duration: 5 minutes',
+        action: "Check which process is using the CPU with 'top' or 'htop'.",
+        instance: 'node-exporter:9100',
+        startsAt: new Date(Date.now() - 600000).toISOString(),
+        endsAt: null,
+        receivedAt: new Date(Date.now() - 300000).toISOString(),
+        active: true,
+      },
+      {
+        status: 'resolved',
+        alertname: 'HighErrorRate',
+        severity: 'warning',
+        summary: 'HIGH ERROR RATE',
+        description: 'HIGH ERROR RATE | Server: backend:5000 | Error Rate: 2.1% | Duration: 2 minutes',
+        action: 'Inspect backend application logs for 5xx errors.',
+        instance: 'backend:5000',
+        startsAt: new Date(Date.now() - 900000).toISOString(),
+        endsAt: new Date(Date.now() - 600000).toISOString(),
+        receivedAt: new Date(Date.now() - 580000).toISOString(),
+        active: false,
+      },
+      {
+        status: 'firing',
+        alertname: 'HighErrorRate',
+        severity: 'warning',
+        summary: 'HIGH ERROR RATE',
+        description: 'HIGH ERROR RATE | Server: backend:5000 | Error Rate: 94.6% | Duration: 2 minutes',
+        action: 'Check backend logs for 500 errors.',
+        instance: 'backend:5000',
+        startsAt: new Date(Date.now() - 900000).toISOString(),
+        endsAt: null,
+        receivedAt: new Date(Date.now() - 780000).toISOString(),
+        active: false,
+      },
+    ];
+
+    return {
+      reachable: true,
+      alerts,
+      summary: {
+        firingNow: 2,
+        resolved: 1,
+        total: 4,
+      },
+      checkedAt: new Date().toISOString(),
     };
   },
 };
