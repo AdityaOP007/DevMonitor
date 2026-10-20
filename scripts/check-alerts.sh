@@ -32,11 +32,17 @@ for arg in "$@"; do
 done
 
 PASSED=0
+SKIPPED=0
 FAILED=0
 
 log_pass() {
   echo -e "\033[0;32m[PASS] $1\033[0m"
   PASSED=$((PASSED + 1))
+}
+
+log_skip() {
+  echo -e "\033[0;33m[SKIP] $1\033[0m"
+  SKIPPED=$((SKIPPED + 1))
 }
 
 log_fail() {
@@ -271,7 +277,7 @@ fi
 # ------------------------------------------------------------------------------
 echo -e "\n--- Step 7: REAL end-to-end HighErrorRate test ---"
 if [ "$SKIP_SLOW" -eq 1 ]; then
-  log_pass "7. REAL end-to-end HighErrorRate skipped (--skip-slow flag supplied)"
+  log_skip "7. REAL end-to-end HighErrorRate skipped (--skip-slow flag supplied)"
 else
   curl -s -X POST "$RECEIVER_URL/clear" >/dev/null 2>&1
   curl -s -X POST "$BACKEND_URL/api/test/errors" >/dev/null 2>&1
@@ -431,8 +437,9 @@ else
 fi
 
 echo -e "\n=== Test Summary ==="
-echo "Passed: $PASSED"
-echo "Failed: $FAILED"
+echo "Passed:  $PASSED"
+echo "Skipped: $SKIPPED"
+echo "Failed:  $FAILED"
 
 if [ "$FAILED" -gt 0 ]; then
   exit 1

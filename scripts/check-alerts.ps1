@@ -22,11 +22,17 @@ param(
 
 $ErrorActionPreference = "Stop"
 $script:passed = 0
+$script:skipped = 0
 $script:failed = 0
 
 function Log-Pass($msg) {
   Write-Host "[PASS] $msg" -ForegroundColor Green
   $script:passed++
+}
+
+function Log-Skip($msg) {
+  Write-Host "[SKIP] $msg" -ForegroundColor Yellow
+  $script:skipped++
 }
 
 function Log-Fail($msg, $detail = "") {
@@ -297,7 +303,7 @@ try {
   # ----------------------------------------------------------------------------
   Write-Host "`n--- Step 7: REAL end-to-end HighErrorRate test ---"
   if ($SkipSlow) {
-    Log-Pass "7. REAL end-to-end HighErrorRate skipped (-SkipSlow flag supplied)"
+    Log-Skip "7. REAL end-to-end HighErrorRate skipped (-SkipSlow flag supplied)"
   } else {
     try {
       # Clear receiver
@@ -321,7 +327,8 @@ try {
         $hr = $alerts | Where-Object { $_.alertname -eq "HighErrorRate" -and $_.status -eq "firing" }
         if ($hr) {
           $errorRateFired = $true
-          Write-Host "HighErrorRate alert received at receiver!" -ForegroundColor Cyan
+          $hrJson = ($hr | ConvertTo-Json -Compress)
+          Write-Host "Captured Receiver Alert (firing): $hrJson" -ForegroundColor Cyan
           break
         }
         Start-Sleep -Seconds 3
@@ -342,6 +349,8 @@ try {
         $hrRes = $alerts | Where-Object { $_.alertname -eq "HighErrorRate" -and $_.status -eq "resolved" }
         if ($hrRes) {
           $errorRateResolved = $true
+          $hrResJson = ($hrRes | ConvertTo-Json -Compress)
+          Write-Host "Captured Receiver Alert (resolved): $hrResJson" -ForegroundColor Cyan
           break
         }
         Start-Sleep -Seconds 3
@@ -525,8 +534,9 @@ try {
 }
 
 Write-Host "`n=== Test Summary ==="
-Write-Host "Passed: $($script:passed)"
-Write-Host "Failed: $($script:failed)"
+Write-Host "Passed:  $($script:passed)"
+Write-Host "Skipped: $($script:skipped)"
+Write-Host "Failed:  $($script:failed)"
 
 if ($script:failed -gt 0) {
   exit 1
