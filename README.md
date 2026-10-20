@@ -402,10 +402,53 @@ DevMonitor includes ready-to-use configuration templates for Slack and Email:
 
 ---
 
+## Alert Receiver Page (In-App Observability)
+
+DevMonitor includes a dedicated **Alert Receiver** page (`/alert-receiver`), accessible directly from the sidebar.
+
+### What It Shows
+The Alert Receiver page displays real-time alert notifications that Alertmanager has dispatched to DevMonitor's local receiver. It provides:
+- **Summary Cards:** "Firing now" (active alerts), "Resolved", and "Total received", updated live with semantic status badges and icons (wrapped in `aria-live="polite"`).
+- **Filter Bar:** Filter between "All", "Firing now", and "Resolved" notifications with live counts, relative update timers ("Updated N seconds ago"), and a manual refresh button.
+- **Notification Table:** Chronological feed (newest first) detailing alert status (distinguishing currently firing, resolved, and "Resolved later"), severity (`critical` / `warning`), alert name, summary, server instance, and relative reception time with tooltip timestamps.
+- **Expandable Details:** Drill-down drawer showing description, recommended actions ("What to check"), startsAt, endsAt, and target instance. All alert text is strictly rendered as safe text nodes (never HTML).
+- **Empty & Unreachable States:** Friendly guides with links to the Failure Simulator when empty, and non-blocking retry alerts if the receiver container is unreachable.
+
+### How It Differs from the Existing "Alerts" Page
+- **Alerts Page (`/alerts`):** Displays the application's internal health checks stored in PostgreSQL, allowing users to configure synthetic threshold rules evaluated inside the Node.js backend.
+- **Alert Receiver Page (`/alert-receiver`):** Displays actual notifications emitted by the external Prometheus and Alertmanager production pipeline (`Prometheus rules -> Alertmanager routing -> Alert Receiver`).
+
+### Independent Architectural Pipeline (Why It Bypasses the Backend)
+The browser fetches notifications via `GET /receiver/alerts`. Nginx reverse-proxies this single read-only endpoint directly to `http://alert-receiver:8080/alerts` over the Docker internal network (`browser -> Nginx /receiver/alerts -> alert-receiver`).
+
+**Critical Design Rationale:** The Alert Receiver page MUST keep functioning when the backend container is completely offline or crashing, because that is the exact scenario where the `BackendDown` alert fires. Routing alert queries through Express would blind the operator during backend outages. By proxying directly from Nginx to the receiver, the page remains fully operational during backend failures.
+
+### How to See It in Action
+1. **Scenario A (Backend Down):**
+   ```bash
+   docker stop devmonitor-backend
+   ```
+   Wait approximately 90–120 seconds for Prometheus to evaluate `BackendDown` and Alertmanager to route it. Open [http://localhost:8080/alert-receiver](http://localhost:8080/alert-receiver) to see the `BackendDown` critical notification firing live while `/api` returns 502/504. Restart the backend (`docker start devmonitor-backend`) to observe the green resolved follow-up.
+2. **Scenario B (High Error Rate via Failure Simulator):**
+   Navigate to `/simulator`, trigger **Generate API Errors**, and send steady traffic. Within ~2 minutes, the `HighErrorRate` warning notification will appear in the Alert Receiver.
+
+### Honest Disclosures & Operational Constraints
+1. **In-Memory Volatility:** Notifications reside exclusively in the receiver's in-memory ring buffer (up to 100 entries). When `devmonitor-alert-receiver` restarts, stored notifications are cleared.
+2. **Read-Only but Unauthenticated:** `GET /receiver/alerts` is read-only and hardened (all write methods denied, all other paths return 404), but it is unauthenticated. Like the rest of the application on port `8080`, anyone who can access the site can view received notifications. Production deployment to a public VPS requires authentication.
+3. **Notification Stream vs Alert Rules:** The page displays *notifications received*, not raw Prometheus alert state. A rule may be evaluating in Prometheus, but it only appears here once Alertmanager finishes its grouping buffer and sends a webhook.
+4. **Independent Delivery Channels:** The receiver page reflects the local webhook receiver only. External Slack webhooks and SMTP email notifications are routed independently by Alertmanager and remain completely unaffected.
+
+---
+
 ## Automated Verification Scripts
 
-Comprehensive test suites validate configuration, proxying, metric isolation, failure simulation, database persistence, Prometheus scraping, Grafana dashboarding, and Alertmanager pipelines:
+Comprehensive test suites validate configuration, proxying, metric isolation, failure simulation, database persistence, Prometheus scraping, Grafana dashboarding, Alertmanager pipelines, and the Alert Receiver in-app page:
 
+- **Alert Receiver In-App Page & Nginx Proxy Suite:**
+  - PowerShell (Full): `powershell -ExecutionPolicy Bypass -File scripts/check-alert-page.ps1`
+  - PowerShell (Fast): `powershell -ExecutionPolicy Bypass -File scripts/check-alert-page.ps1 -SkipSlow`
+  - Bash (Full): `chmod +x scripts/check-alert-page.sh && ./scripts/check-alert-page.sh`
+  - Bash (Fast): `./scripts/check-alert-page.sh --skip-slow`
 - **Alertmanager & Rules Pipeline Suite:**
   - PowerShell (Full): `powershell -ExecutionPolicy Bypass -File scripts/check-alerts.ps1`
   - PowerShell (Fast): `powershell -ExecutionPolicy Bypass -File scripts/check-alerts.ps1 -SkipSlow`
@@ -422,6 +465,8 @@ Comprehensive test suites validate configuration, proxying, metric isolation, fa
   - Bash: `chmod +x scripts/check-docker.sh && ./scripts/check-docker.sh`
 - **Scrape Contract Verification:**
   - `cd backend && npm run check:metrics`
+- **Frontend Logic Unit Tests:**
+  - `cd frontend && npm run test:logic`
 
 ---
 
@@ -436,7 +481,7 @@ Comprehensive test suites validate configuration, proxying, metric isolation, fa
    - **Alertmanager (9093):** Published strictly on loopback `127.0.0.1:9093`. Alertmanager does not contain authentication mechanisms and must never be exposed publicly.
    - **Alert Receiver (8025):** Published strictly on loopback `127.0.0.1:8025`. Internal test receiver only.
    - **Node Exporter (9100):** Not published to the host at all (no `ports:` definition). It is accessible exclusively by Prometheus over the internal `devmonitor` Docker network.
-   - **Frontend Proxy Isolation:** Public access to `/metrics` through Nginx on port `8080` is explicitly blocked (`return 404`). Neither Grafana, Prometheus, Alertmanager, nor the Alert Receiver is proxied by Nginx.
+   - **Frontend Proxy Isolation:** Public access to `/metrics` through Nginx on port `8080` is explicitly blocked (`return 404`). Neither Grafana, Prometheus, nor Alertmanager is proxied by Nginx. For the Alert Receiver, Nginx strictly proxies a single read-only endpoint (`GET = /receiver/alerts`) to feed the in-app Alert Receiver page; all modifying methods (POST, PUT, DELETE) and all other receiver paths (`/clear`, `/webhook`, `/health`, `/`) return 404 or 403.
 3. **Service Status Row Updates:**
    - On the frontend **Services** page (`/services`), **Prometheus** reports as **Collecting** (green), and **Grafana** reports as **Connected** (green) as the backend probes `http://grafana:3000/api/health`.
 4. **Frontend Build-Time Configuration (`VITE_USE_MOCK`):**
@@ -446,7 +491,8 @@ Comprehensive test suites validate configuration, proxying, metric isolation, fa
 6. **Alerting Pipeline Architecture and Honest Disclosures:**
    - **CPU and Memory Alert Verification:** The `HighCpuUsage` and `HighMemoryUsage` rules are verified via `promtool` unit tests. The Failure Simulator's CPU load scenario runs on a single worker thread and cannot trigger a machine-wide $\ge 80\%$ CPU or $\ge 85\%$ RAM breach on modern multi-core development hosts.
    - **VM Telemetry on Docker Desktop:** Hardware telemetry reflects the Docker Desktop Linux VM (WSL2 / Hyper-V), not the physical host machine.
-   - **Application Internal Alerts vs Alertmanager:** DevMonitor's web UI features an internal `/alerts` page backed by PostgreSQL tables and an in-app threshold evaluator. This is completely separate and independent from the Prometheus and Alertmanager infrastructure pipeline (the two systems do not share state).
+   - **Application Internal Alerts vs Alertmanager Pipeline:** DevMonitor's web UI features an internal `/alerts` page backed by PostgreSQL tables and an in-app threshold evaluator. This is separate from the Prometheus and Alertmanager infrastructure pipeline. The newly added `/alert-receiver` page displays notifications from the real Prometheus + Alertmanager pipeline directly inside the web UI, while the internal `/alerts` page continues to manage in-app synthetic checks.
    - **Slack and Email Verification:** Slack and Email templates are syntactically validated using `amtool check-config`, but external internet delivery was not live-fired during automated verification to prevent spamming real external webhooks/mailboxes.
    - **Ephemeral In-Memory Receiver:** The `devmonitor-alert-receiver` is an in-memory testing and demonstration sink storing the 100 most recent alerts in RAM. Alerts clear on container restart or via the `/clear` button.
-   - **Loopback Isolation:** Neither Alertmanager (`9093`) nor the Alert Receiver (`8025`) provides authentication. Both are strictly bound to `127.0.0.1` and are never exposed publicly or proxied by Nginx.
+   - **Loopback Isolation & Security Boundaries:** Neither Alertmanager (`9093`) nor the standalone Alert Receiver page (`8025`) provides authentication. Both are strictly bound to `127.0.0.1` on the host. The frontend container proxies only `GET /receiver/alerts` to enable the in-app Alert Receiver page; all modifying methods and destructive endpoints (`/clear`) are blocked.
+
