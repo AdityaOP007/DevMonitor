@@ -500,12 +500,13 @@ try {
     $ignoreCheck = (git check-ignore alertmanager/secrets/slack_webhook_url alertmanager/secrets/smtp_password 2>&1)
     $ignoreExit = $LASTEXITCODE
 
-    # Check git tracked files for slack webhook URL pattern
-    $slackTracked = (git grep -i "hooks.slack.com/services" 2>&1)
+    # Check git tracked files for slack webhook URL pattern (split to prevent self-matching in git grep)
+    $slackPattern = "hooks.slack." + "com/services"
+    $slackTracked = (git grep -i $slackPattern 2>&1)
     $slackExit = $LASTEXITCODE
 
     if ($ignoreExit -eq 0 -and $slackExit -ne 0) {
-      Log-Pass "11. Secrets hygiene verified: git check-ignore covers real secret files; 0 tracked files match hooks.slack.com/services"
+      Log-Pass "11. Secrets hygiene verified: git check-ignore covers real secret files; 0 tracked files match Slack webhook URL pattern"
     } else {
       Log-Fail "11. Secrets hygiene check failed" "CheckIgnoreExit: $ignoreExit, SlackTrackedExit: $slackExit"
     }

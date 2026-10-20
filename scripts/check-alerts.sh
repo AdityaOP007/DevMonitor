@@ -418,13 +418,14 @@ echo -e "\n--- Step 11: Verifying Secrets Hygiene & Git Tracking Rules ---"
 IGNORE_OK=0
 git check-ignore alertmanager/secrets/slack_webhook_url alertmanager/secrets/smtp_password >/dev/null 2>&1 && IGNORE_OK=1
 
+SLACK_PATTERN="hooks.slack.""com/services"
 SLACK_CLEAN=0
-if ! git grep -i "hooks.slack.com/services" >/dev/null 2>&1; then
+if ! git grep -i "$SLACK_PATTERN" >/dev/null 2>&1; then
   SLACK_CLEAN=1
 fi
 
 if [ "$IGNORE_OK" -eq 1 ] && [ "$SLACK_CLEAN" -eq 1 ]; then
-  log_pass "11. Secrets hygiene verified: git check-ignore covers real secrets; 0 tracked files match hooks.slack.com/services"
+  log_pass "11. Secrets hygiene verified: git check-ignore covers real secrets; 0 tracked files match Slack webhook URL pattern"
 else
   log_fail "11. Secrets hygiene check failed"
 fi

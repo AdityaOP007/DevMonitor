@@ -372,7 +372,7 @@ docker run --rm --entrypoint promtool -v "${PWD}/prometheus:/etc/prometheus" -w 
 DevMonitor includes ready-to-use configuration templates for Slack and Email:
 
 1. **Create the Secrets File (Git-Ignored):**
-   - For **Slack**: create `alertmanager/secrets/slack_webhook_url` containing your incoming webhook URL (e.g. `https://hooks.slack.com/services/...`).
+   - For **Slack**: create `alertmanager/secrets/slack_webhook_url` containing your incoming webhook URL (e.g. `https://example.com/slack-webhook-placeholder`).
    - For **Email**: create `alertmanager/secrets/smtp_password` containing your SMTP application password.
    *(These files are strictly gitignored to prevent accidental credential leakage).*
 2. **Switch Alertmanager Configuration in `.env`:**
