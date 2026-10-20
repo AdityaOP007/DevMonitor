@@ -178,7 +178,7 @@ try {
   Start-Sleep -Seconds 35
 
   $dashUids = @("devmonitor-infrastructure", "devmonitor-application", "devmonitor-database")
-  $allowListEmpty = @("Error Rate (%)", "Queries per Second", "Average Query Duration", "Queries per Second Timeline", "Average Query Duration and p95")
+  $allowListEmpty = @("Error Rate (%)", "Queries per Second", "Average Query Duration", "Queries per Second Timeline", "Average Query Duration and p95", "Firing Alerts", "Active Alerts")
   $allPanelsOk = $true
   $failedDetail = ""
 
