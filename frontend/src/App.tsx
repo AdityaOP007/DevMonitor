@@ -7,6 +7,7 @@ import { API } from './pages/API';
 import { Errors } from './pages/Errors';
 import { Database } from './pages/Database';
 import { Alerts } from './pages/Alerts';
+import { AlertReceiver } from './pages/AlertReceiver';
 import { Playground } from './pages/Playground';
 import { Simulator } from './pages/Simulator';
 import { Connect } from './pages/Connect';
@@ -25,6 +26,7 @@ export function App() {
           <Route path="errors" element={<Errors />} />
           <Route path="database" element={<Database />} />
           <Route path="alerts" element={<Alerts />} />
+          <Route path="alert-receiver" element={<AlertReceiver />} />
           <Route path="playground" element={<Playground />} />
           <Route path="simulator" element={<Simulator />} />
           <Route path="connect" element={<Connect />} />

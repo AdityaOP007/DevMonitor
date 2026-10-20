@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { AlertBanner } from '../components/AlertBanner';
 import { MetricCard } from '../components/MetricCard';
 import { SimulatorActionGrid } from '../components/simulator/SimulatorActionGrid';
@@ -131,13 +132,24 @@ export const Simulator: React.FC = () => {
 
       {/* Active Alert Banner */}
       {alertBannerInfo && (
-        <AlertBanner
-          title={alertBannerInfo.title}
-          message={alertBannerInfo.message}
-          recommendedAction={alertBannerInfo.action}
-          severity={alertBannerInfo.severity}
-          onDismiss={() => setAlertBannerInfo(null)}
-        />
+        <div className="space-y-2">
+          <AlertBanner
+            title={alertBannerInfo.title}
+            message={alertBannerInfo.message}
+            recommendedAction={alertBannerInfo.action}
+            severity={alertBannerInfo.severity}
+            onDismiss={() => setAlertBannerInfo(null)}
+          />
+          <p className="text-xs text-slate-500 pl-1">
+            Alerts take a couple of minutes to fire.{' '}
+            <Link
+              to="/alert-receiver"
+              className="text-blue-600 hover:text-blue-800 underline font-medium"
+            >
+              Watch them arrive on the Alert Receiver page.
+            </Link>
+          </p>
+        </div>
       )}
 
       {/* Live Impact Preview */}
