@@ -107,6 +107,7 @@ services:
       - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
       - prometheus_data:/prometheus
     ports:
       # Published on LOOPBACK ONLY. Prometheus has no authentication
@@ -192,6 +193,66 @@ services:
     networks:
       - devmonitor
 
+  # 7. Local Alert Webhook Receiver Service
+  alert-receiver:
+    build:
+      context: ./alert-receiver
+      dockerfile: Dockerfile
+    container_name: devmonitor-alert-receiver
+    restart: unless-stopped
+    ports:
+      # Published on LOOPBACK ONLY (127.0.0.1).
+      # The receiver has no authentication; never publish publicly on external interfaces.
+      - "127.0.0.1:8025:8080"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8080/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 5s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    networks:
+      - devmonitor
+
+  # 8. Alertmanager Alert Routing & Notification Service
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    container_name: devmonitor-alertmanager
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --web.external-url=http://127.0.0.1:9093
+      - --cluster.listen-address=
+    volumes:
+      - alertmanager_data:/alertmanager
+      - ./alertmanager/${ALERTMANAGER_CONFIG:-alertmanager.yml}:/etc/alertmanager/alertmanager.yml:ro
+      - ./alertmanager/secrets:/etc/alertmanager/secrets:ro
+    ports:
+      # Published strictly to loopback (127.0.0.1) for local host access.
+      # Alertmanager has no authentication and must NEVER be published publicly.
+      - "127.0.0.1:9093:9093"
+    depends_on:
+      alert-receiver:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:9093/-/healthy || exit 1"]
+      interval: 15s
+      timeout: 5s
+      start_period: 5s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    networks:
+      - devmonitor
+
 volumes:
   postgres_data:
     name: devmonitor_postgres_data
@@ -199,6 +260,8 @@ volumes:
     name: devmonitor_prometheus_data
   grafana_data:
     name: devmonitor_grafana_data
+  alertmanager_data:
+    name: devmonitor_alertmanager_data
 
 networks:
   devmonitor:

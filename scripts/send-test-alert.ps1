@@ -33,24 +33,22 @@ if ($Resolved) {
   $statusMsg = "FIRING"
 }
 
-$alertPayload = @(
-  @{
-    labels = @{
-      alertname = "TestAlert"
-      severity  = "warning"
-      instance  = "manual-test:9093"
-    }
-    annotations = @{
-      summary     = "TEST ALERT"
-      description = "This is a test of the alert pipeline"
-      action      = "Verify that your webhook receiver, Slack channel, or email received this notification."
-    }
-    startsAt = $startsAt
-    endsAt   = $endsAt
+$singleAlertJson = @{
+  labels = @{
+    alertname = "TestAlert"
+    severity  = "warning"
+    instance  = "manual-test:9093"
   }
-)
+  annotations = @{
+    summary     = "TEST ALERT"
+    description = "This is a test of the alert pipeline"
+    action      = "Verify that your webhook receiver, Slack channel, or email received this notification."
+  }
+  startsAt = $startsAt
+  endsAt   = $endsAt
+} | ConvertTo-Json -Depth 5 -Compress
 
-$jsonBody = $alertPayload | ConvertTo-Json -Depth 5 -Compress
+$jsonBody = "[$singleAlertJson]"
 
 Write-Host "Sending $statusMsg TestAlert to Alertmanager ($AlertmanagerUrl/api/v2/alerts)..." -ForegroundColor Cyan
 
