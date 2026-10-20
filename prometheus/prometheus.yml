@@ -25,11 +25,24 @@ global:
   scrape_interval: 15s
   # How frequently Prometheus evaluates recording and alerting rules
   evaluation_interval: 15s
+  # Labels added to all time series and alerts leaving this Prometheus instance.
+  # Useful for identifying the source environment in multi-cluster setups.
+  external_labels:
+    environment: local
 
-# Rule files (recording rules and alerting rules) are out of scope for this stage.
-# Alertmanager configuration and alerting rules will be added in a future phase.
-# rule_files:
-# alerting:
+# Rule files: Prometheus loads alerting rules from YAML files in this directory.
+# Each file defines conditions (like "CPU > 80% for 5 minutes") that trigger alerts.
+rule_files:
+  - "/etc/prometheus/rules/*.yml"
+
+# Alerting: When a rule fires, Prometheus sends the alert to Alertmanager,
+# which handles deduplication, grouping, silencing, and routing to receivers
+# (webhook, Slack, email, etc.).
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - "alertmanager:9093"
 
 scrape_configs:
   # Job 1: Prometheus monitoring its own runtime performance and TSDB storage

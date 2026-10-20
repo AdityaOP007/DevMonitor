@@ -1,0 +1,152 @@
+# prometheus/rules/devmonitor-alerts.yml
+# ==============================================================================
+# DevMonitor Alerting Rules
+# ==============================================================================
+# These rules tell Prometheus to check conditions every evaluation cycle (15s).
+# When a condition stays true for the 'for' duration, the alert FIRES and
+# Prometheus sends it to Alertmanager, which decides how to notify you.
+#
+# Every alert has:
+#   - A human-readable name (e.g. HighCpuUsage)
+#   - An expression that evaluates to true when something is wrong
+#   - A 'for' duration: how long the problem must persist before firing
+#   - Labels: severity (warning or critical) for routing and display
+#   - Annotations: summary (headline), description (details), action (what to do)
+#
+# IMPORTANT: No alert rule uses a label named 'service' to avoid collision
+# with the devmonitor_service_up metric's own 'service' label.
+# ==============================================================================
+
+groups:
+  # ============================================================================
+  # Infrastructure Alerts
+  # Monitor the underlying host machine's hardware resources.
+  # These alerts watch Node Exporter metrics from the Linux VM
+  # (on Docker Desktop this is the WSL2/HyperKit VM, not the Windows/macOS host).
+  # ============================================================================
+  - name: infrastructure
+    interval: 15s
+    rules:
+      # HighCpuUsage
+      # Fires when the average CPU usage across all cores exceeds 80% for 5 minutes.
+      # In plain language: "The machine's processor has been very busy for 5 minutes straight."
+      - alert: HighCpuUsage
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[2m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HIGH CPU USAGE"
+          description: "HIGH CPU USAGE | Server: {{ $labels.instance }} | CPU: {{ $value | printf \"%.0f\" }}% | Duration: 5 minutes"
+          action: "Check which process is using the CPU with 'top' or 'htop'. Look for runaway loops or heavy workloads."
+
+      # HighMemoryUsage
+      # Fires when available memory drops below 15% (usage above 85%) for 5 minutes.
+      # In plain language: "The machine is running low on free memory for 5 minutes."
+      - alert: HighMemoryUsage
+        expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HIGH MEMORY USAGE"
+          description: "HIGH MEMORY USAGE | Server: {{ $labels.instance }} | Memory: {{ $value | printf \"%.0f\" }}% | Duration: 5 minutes"
+          action: "Check which process is consuming memory. Consider restarting memory-heavy containers or adding more RAM."
+
+      # HighDiskUsage
+      # Fires when disk usage on the root or /var/lib partition exceeds 85% for 10 minutes.
+      # Uses the same filesystem selector as the Infrastructure dashboard's Disk Usage panel.
+      - alert: HighDiskUsage
+        expr: (1 - node_filesystem_avail_bytes{mountpoint=~"^(/|/var/lib)$",fstype="ext4"} / node_filesystem_size_bytes{mountpoint=~"^(/|/var/lib)$",fstype="ext4"}) * 100 > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HIGH DISK USAGE"
+          description: "HIGH DISK USAGE | Server: {{ $labels.instance }} | Disk: {{ $value | printf \"%.0f\" }}% | Duration: 10 minutes"
+          action: "Free disk space by pruning old Docker images (docker system prune) or removing unused files."
+
+  # ============================================================================
+  # Application Alerts
+  # Monitor the Express backend API's health, error rate, and response time.
+  # These alerts watch metrics exported by prom-client in the backend container.
+  # ============================================================================
+  - name: application
+    interval: 15s
+    rules:
+      # BackendDown
+      # Fires when the backend container is unreachable for 1 minute.
+      # In plain language: "Prometheus cannot reach the backend — the API is down."
+      - alert: BackendDown
+        expr: up{job="backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "BACKEND DOWN"
+          description: "BACKEND DOWN | Server: {{ $labels.instance }} | Duration: 1 minute"
+          action: "Check if the backend container is running with 'docker compose ps'. Look at backend logs with 'docker compose logs backend'."
+
+      # HighErrorRate
+      # Fires when more than 5% of HTTP requests result in errors, sustained for 2 minutes.
+      # The minimum-traffic guard (> 0.1 req/s) prevents false alarms from one or two failed
+      # requests out of a handful — there must be real traffic flowing for this to fire.
+      - alert: HighErrorRate
+        expr: >
+          (100 * sum by (instance) (rate(http_errors_total[2m])) / sum by (instance) (rate(http_requests_total[2m])) > 5)
+          and (sum by (instance) (rate(http_requests_total[2m])) > 0.1)
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HIGH ERROR RATE"
+          description: "HIGH ERROR RATE | Server: {{ $labels.instance }} | Error Rate: {{ $value | printf \"%.1f\" }}% | Duration: 2 minutes"
+          action: "Check backend logs for 500 errors. The Failure Simulator may be active — try POST /api/test/restore to clear simulated errors."
+
+      # HighResponseTime
+      # Fires when the average HTTP response time exceeds 300ms for 5 minutes.
+      # Same minimum-traffic guard as HighErrorRate.
+      - alert: HighResponseTime
+        expr: >
+          (sum by (instance) (rate(http_request_duration_seconds_sum[2m])) / sum by (instance) (rate(http_request_duration_seconds_count[2m])) > 0.3)
+          and (sum by (instance) (rate(http_requests_total[2m])) > 0.1)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HIGH RESPONSE TIME"
+          description: "HIGH RESPONSE TIME | Server: {{ $labels.instance }} | Avg Response: {{ $value | printf \"%.3f\" }}s | Duration: 5 minutes"
+          action: "Check for slow database queries or high CPU usage. The Failure Simulator's slow mode may be active."
+
+  # ============================================================================
+  # Database and Target Alerts
+  # Monitor database connectivity and scrape target availability.
+  # ============================================================================
+  - name: database_and_targets
+    interval: 15s
+    rules:
+      # DatabaseDown
+      # Fires when the backend cannot reach the PostgreSQL database for 1 minute.
+      # In plain language: "The database is unreachable — the app cannot store or read data."
+      - alert: DatabaseDown
+        expr: devmonitor_db_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "DATABASE DOWN"
+          description: "DATABASE DOWN | Server: {{ $labels.instance }} | Duration: 1 minute"
+          action: "Check if the postgres container is running. Look at postgres logs with 'docker compose logs postgres'."
+
+      # TargetDown
+      # Fires when any non-backend scrape target (prometheus itself, node-exporter) is down.
+      # The backend has its own BackendDown rule, so we exclude it here to avoid duplicates.
+      - alert: TargetDown
+        expr: up{job!="backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "TARGET DOWN"
+          description: "TARGET DOWN | Target: {{ $labels.job }}:{{ $labels.instance }} | Duration: 1 minute"
+          action: "Check if the target container is running with 'docker compose ps'. Inspect its logs for errors."

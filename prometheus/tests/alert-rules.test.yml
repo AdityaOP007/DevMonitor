@@ -1,0 +1,288 @@
+# prometheus/tests/alert-rules.test.yml
+# ==============================================================================
+# Unit Tests for DevMonitor Alert Rules
+# ==============================================================================
+# Run with: promtool test rules prometheus/tests/alert-rules.test.yml
+# (or inside the Prometheus container)
+#
+# Each rule has TWO test cases:
+#   1. FIRE: Synthetic series that breaches the threshold for the 'for' duration → alert fires
+#   2. NO FIRE: Synthetic series just below the threshold → alert does NOT fire
+# ==============================================================================
+
+rule_files:
+  - ../rules/devmonitor-alerts.yml
+
+evaluation_interval: 15s
+
+tests:
+  # ============================================================================
+  # HighCpuUsage: > 80% CPU for 5m
+  # ============================================================================
+  - interval: 15s
+    input_series:
+      # Simulate 95% CPU usage (only 5% idle):
+      # 5% idle over 15s step = 0.05 * 15 = 0.75s idle per step
+      # rate of idle = 0.75 / 15 = 0.05 per second → 100 - (0.05*100) = 95% CPU usage
+      - series: 'node_cpu_seconds_total{mode="idle", cpu="0", instance="node-exporter:9100"}'
+        values: "0+0.75x80"
+      - series: 'node_cpu_seconds_total{mode="user", cpu="0", instance="node-exporter:9100"}'
+        values: "0+14.25x80"
+    alert_rule_test:
+      # At 5m (eval_time), the for=5m should be satisfied
+      - eval_time: 10m
+        alertname: HighCpuUsage
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: "node-exporter:9100"
+            exp_annotations:
+              summary: "HIGH CPU USAGE"
+              description: "HIGH CPU USAGE | Server: node-exporter:9100 | CPU: 95% | Duration: 5 minutes"
+              action: "Check which process is using the CPU with 'top' or 'htop'. Look for runaway loops or heavy workloads."
+
+  # HighCpuUsage: below threshold (70% usage = 30% idle) → no fire
+  - interval: 15s
+    input_series:
+      # 30% idle over 15s step = 0.30 * 15 = 4.5s idle per step
+      # rate of idle = 4.5 / 15 = 0.30 per second → 100 - (0.30*100) = 70% CPU usage
+      - series: 'node_cpu_seconds_total{mode="idle", cpu="0", instance="node-exporter:9100"}'
+        values: "0+4.5x80"
+      - series: 'node_cpu_seconds_total{mode="user", cpu="0", instance="node-exporter:9100"}'
+        values: "0+10.5x80"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HighCpuUsage
+        exp_alerts: []
+
+  # ============================================================================
+  # HighMemoryUsage: > 85% for 5m
+  # ============================================================================
+  - interval: 15s
+    input_series:
+      # 90% memory usage: total=1000, available=100 → (1-100/1000)*100 = 90%
+      - series: 'node_memory_MemAvailable_bytes{instance="node-exporter:9100"}'
+        values: "100x80"
+      - series: 'node_memory_MemTotal_bytes{instance="node-exporter:9100"}'
+        values: "1000x80"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HighMemoryUsage
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: "node-exporter:9100"
+            exp_annotations:
+              summary: "HIGH MEMORY USAGE"
+              description: "HIGH MEMORY USAGE | Server: node-exporter:9100 | Memory: 90% | Duration: 5 minutes"
+              action: "Check which process is consuming memory. Consider restarting memory-heavy containers or adding more RAM."
+
+  # HighMemoryUsage: below threshold (80% usage) → no fire
+  - interval: 15s
+    input_series:
+      - series: 'node_memory_MemAvailable_bytes{instance="node-exporter:9100"}'
+        values: "200x80"
+      - series: 'node_memory_MemTotal_bytes{instance="node-exporter:9100"}'
+        values: "1000x80"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HighMemoryUsage
+        exp_alerts: []
+
+  # ============================================================================
+  # HighDiskUsage: > 85% for 10m
+  # ============================================================================
+  - interval: 15s
+    input_series:
+      # 90% disk usage: size=1000, avail=100 → (1-100/1000)*100 = 90%
+      - series: 'node_filesystem_avail_bytes{mountpoint="/", fstype="ext4", instance="node-exporter:9100"}'
+        values: "100x120"
+      - series: 'node_filesystem_size_bytes{mountpoint="/", fstype="ext4", instance="node-exporter:9100"}'
+        values: "1000x120"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: HighDiskUsage
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: "node-exporter:9100"
+              mountpoint: "/"
+              fstype: "ext4"
+            exp_annotations:
+              summary: "HIGH DISK USAGE"
+              description: "HIGH DISK USAGE | Server: node-exporter:9100 | Disk: 90% | Duration: 10 minutes"
+              action: "Free disk space by pruning old Docker images (docker system prune) or removing unused files."
+
+  # HighDiskUsage: below threshold (80% usage) → no fire
+  - interval: 15s
+    input_series:
+      - series: 'node_filesystem_avail_bytes{mountpoint="/", fstype="ext4", instance="node-exporter:9100"}'
+        values: "200x120"
+      - series: 'node_filesystem_size_bytes{mountpoint="/", fstype="ext4", instance="node-exporter:9100"}'
+        values: "1000x120"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: HighDiskUsage
+        exp_alerts: []
+
+  # ============================================================================
+  # BackendDown: up{job="backend"} == 0 for 1m
+  # ============================================================================
+  - interval: 15s
+    input_series:
+      - series: 'up{job="backend", instance="backend:5000"}'
+        values: "0x20"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: BackendDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: backend
+              instance: "backend:5000"
+            exp_annotations:
+              summary: "BACKEND DOWN"
+              description: "BACKEND DOWN | Server: backend:5000 | Duration: 1 minute"
+              action: "Check if the backend container is running with 'docker compose ps'. Look at backend logs with 'docker compose logs backend'."
+
+  # BackendDown: backend is up → no fire
+  - interval: 15s
+    input_series:
+      - series: 'up{job="backend", instance="backend:5000"}'
+        values: "1x20"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: BackendDown
+        exp_alerts: []
+
+  # ============================================================================
+  # HighErrorRate: > 5% errors with traffic > 0.1 req/s for 2m
+  # ============================================================================
+  - interval: 15s
+    input_series:
+      # 10% error rate: 10 errors per 120 seconds among 100 total requests per 120 seconds
+      # rate = count/interval → errors: 10/120 = 0.083/s, total: 100/120 = 0.833/s → 10%
+      - series: 'http_errors_total{instance="backend:5000"}'
+        values: "0+1x80"
+      - series: 'http_requests_total{instance="backend:5000"}'
+        values: "0+10x80"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: HighErrorRate
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: "backend:5000"
+            exp_annotations:
+              summary: "HIGH ERROR RATE"
+              description: "HIGH ERROR RATE | Server: backend:5000 | Error Rate: 10.0% | Duration: 2 minutes"
+              action: "Check backend logs for 500 errors. The Failure Simulator may be active — try POST /api/test/restore to clear simulated errors."
+
+  # HighErrorRate: below threshold (3% error rate) → no fire
+  - interval: 15s
+    input_series:
+      - series: 'http_errors_total{instance="backend:5000"}'
+        values: "0+3x80"
+      - series: 'http_requests_total{instance="backend:5000"}'
+        values: "0+100x80"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: HighErrorRate
+        exp_alerts: []
+
+  # ============================================================================
+  # HighResponseTime: avg response > 0.3s with traffic > 0.1 for 5m
+  # ============================================================================
+  - interval: 15s
+    input_series:
+      # avg = sum/count = 0.5s per request (above 0.3s threshold)
+      - series: 'http_request_duration_seconds_sum{instance="backend:5000"}'
+        values: "0+5x80"
+      - series: 'http_request_duration_seconds_count{instance="backend:5000"}'
+        values: "0+10x80"
+      - series: 'http_requests_total{instance="backend:5000"}'
+        values: "0+10x80"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HighResponseTime
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: "backend:5000"
+            exp_annotations:
+              summary: "HIGH RESPONSE TIME"
+              description: "HIGH RESPONSE TIME | Server: backend:5000 | Avg Response: 0.500s | Duration: 5 minutes"
+              action: "Check for slow database queries or high CPU usage. The Failure Simulator's slow mode may be active."
+
+  # HighResponseTime: below threshold (0.2s) → no fire
+  - interval: 15s
+    input_series:
+      - series: 'http_request_duration_seconds_sum{instance="backend:5000"}'
+        values: "0+2x80"
+      - series: 'http_request_duration_seconds_count{instance="backend:5000"}'
+        values: "0+10x80"
+      - series: 'http_requests_total{instance="backend:5000"}'
+        values: "0+10x80"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HighResponseTime
+        exp_alerts: []
+
+  # ============================================================================
+  # DatabaseDown: devmonitor_db_up == 0 for 1m
+  # ============================================================================
+  - interval: 15s
+    input_series:
+      - series: 'devmonitor_db_up{instance="backend:5000"}'
+        values: "0x20"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: DatabaseDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              instance: "backend:5000"
+            exp_annotations:
+              summary: "DATABASE DOWN"
+              description: "DATABASE DOWN | Server: backend:5000 | Duration: 1 minute"
+              action: "Check if the postgres container is running. Look at postgres logs with 'docker compose logs postgres'."
+
+  # DatabaseDown: database is up → no fire
+  - interval: 15s
+    input_series:
+      - series: 'devmonitor_db_up{instance="backend:5000"}'
+        values: "1x20"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: DatabaseDown
+        exp_alerts: []
+
+  # ============================================================================
+  # TargetDown: up{job!="backend"} == 0 for 1m
+  # ============================================================================
+  - interval: 15s
+    input_series:
+      - series: 'up{job="node", instance="node-exporter:9100"}'
+        values: "0x20"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: TargetDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: node
+              instance: "node-exporter:9100"
+            exp_annotations:
+              summary: "TARGET DOWN"
+              description: "TARGET DOWN | Target: node:node-exporter:9100 | Duration: 1 minute"
+              action: "Check if the target container is running with 'docker compose ps'. Inspect its logs for errors."
+
+  # TargetDown: target is up → no fire
+  - interval: 15s
+    input_series:
+      - series: 'up{job="node", instance="node-exporter:9100"}'
+        values: "1x20"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: TargetDown
+        exp_alerts: []
