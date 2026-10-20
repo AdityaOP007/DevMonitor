@@ -96,8 +96,8 @@ fi
 SERVICES_JSON=$(curl -s "$BASE_URL/api/services")
 if echo "$SERVICES_JSON" | grep -q '"name":"Backend API".*"status":"Healthy"' && \
    (echo "$SERVICES_JSON" | grep -q '"name":"Prometheus".*"status":"Collecting"' || echo "$SERVICES_JSON" | grep -q '"name":"Prometheus".*"status":"Down"') && \
-   echo "$SERVICES_JSON" | grep -q '"name":"Grafana".*"status":"Down"'; then
-  log_pass "6. /api/services shows Backend, Database, Frontend as Healthy, and Grafana as Down"
+   echo "$SERVICES_JSON" | grep -q '"name":"Grafana".*"status":"Connected"'; then
+  log_pass "6. /api/services shows Backend, Database, Frontend as Healthy, and Grafana as Connected"
 else
   log_fail "6. Service statuses mismatch" "$SERVICES_JSON"
 fi

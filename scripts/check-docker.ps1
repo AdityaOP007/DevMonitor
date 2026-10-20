@@ -145,10 +145,10 @@ try {
 
   $upOk = ($backendSvc.status -eq "Healthy") -and ($dbSvc.status -eq "Healthy") -and ($frontendSvc.status -eq "Healthy")
   $promOk = ($promSvc.status -eq "Collecting") -or ($promSvc.status -eq "Down")
-  $downOk = ($promOk) -and ($grafanaSvc.status -eq "Down")
+  $grafanaOk = ($grafanaSvc.status -eq "Connected")
 
-  if ($upOk -and $downOk) {
-    Log-Pass "6. /api/services shows Backend, Database, Frontend as Healthy, Prometheus as $($promSvc.status), and Grafana as Down"
+  if ($upOk -and $promOk -and $grafanaOk) {
+    Log-Pass "6. /api/services shows Backend, Database, Frontend as Healthy, Prometheus as $($promSvc.status), and Grafana as Connected"
   } else {
     Log-Fail "6. Service statuses mismatch" "Backend: $($backendSvc.status), DB: $($dbSvc.status), FE: $($frontendSvc.status), Prom: $($promSvc.status), Grafana: $($grafanaSvc.status)"
   }
