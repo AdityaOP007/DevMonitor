@@ -496,3 +496,44 @@ Comprehensive test suites validate configuration, proxying, metric isolation, fa
    - **Ephemeral In-Memory Receiver:** The `devmonitor-alert-receiver` is an in-memory testing and demonstration sink storing the 100 most recent alerts in RAM. Alerts clear on container restart or via the `/clear` button.
    - **Loopback Isolation & Security Boundaries:** Neither Alertmanager (`9093`) nor the standalone Alert Receiver page (`8025`) provides authentication. Both are strictly bound to `127.0.0.1` on the host. The frontend container proxies only `GET /receiver/alerts` to enable the in-app Alert Receiver page; all modifying methods and destructive endpoints (`/clear`) are blocked.
 
+# When Site is live 
+<img width="1917" height="1078" alt="Screenshot 2026-10-23 024022" src="https://github.com/user-attachments/assets/413942b6-cdbf-4bfa-a275-d13f3e24bd08" />
+<img width="1917" height="1078" alt="Screenshot 2026-10-23 024014" src="https://github.com/user-attachments/assets/37c9de2d-37c7-4f13-9ab8-c7f9288b2bf5" />
+<img width="1917" height="1078" alt="Screenshot 2026-10-23 024008" src="https://github.com/user-attachments/assets/6642848c-36e5-48fa-8b7a-d8ab811ab270" />
+<img width="1917" height="1078" alt="Screenshot 2026-10-23 024000" src="https://github.com/user-attachments/assets/7f50e73d-65e6-4dc8-8012-44983ddebc03" />
+<img width="1917" height="1078" alt="Screenshot 2026-10-23 023951" src="https://github.com/user-attachments/assets/81e4bc3a-71cf-4527-a74e-3c663573b64f" />
+<img width="1917" height="1078" alt="Screenshot 2026-10-23 023943" src="https://github.com/user-attachments/assets/b325422c-5c7a-4635-be19-0ee6c30428ab" />
+<img width="1917" height="1078" alt="Screenshot 2026-10-23 023938" src="https://github.com/user-attachments/assets/c2c2812d-c620-4c55-a00d-86c7da3c81b0" />
+<img width="1917" height="1078" alt="Screenshot 2026-10-23 023931" src="https://github.com/user-attachments/assets/53ff31bd-67da-4c4f-93a1-c3244fff22e6" />
+<img width="1917" height="1078" alt="Screenshot 2026-10-23 023920" src="https://github.com/user-attachments/assets/a780e2a4-26fd-48ee-aa25-f3ee6fcddaab" />
+<img width="1917" height="1078" alt="Screenshot 2026-10-23 023913" src="https://github.com/user-attachments/assets/3baf810a-5736-4c66-b178-771895514e53" />
+<img width="1917" height="1078" alt="Screenshot 2026-10-23 023906" src="https://github.com/user-attachments/assets/e224eade-8c45-4f99-9f1c-e2c45ed3f763" />
+
+# Comparing it with grafana dashboard
+<img width="1917" height="1078" alt="Screenshot 2026-10-23 024102" src="https://github.com/user-attachments/assets/7706eaf8-25d5-49e8-9c4c-2aa683663819" />
+<img width="1917" height="1078" alt="Screenshot 2026-10-23 024050" src="https://github.com/user-attachments/assets/6940c584-ec77-49d6-8c76-092ea08cc343" />
+<img width="1917" height="1078" alt="Screenshot 2026-10-23 024044" src="https://github.com/user-attachments/assets/d539d495-e78e-4a31-b073-a458388cad41" />
+
+# When the site is down (when backend is stopedd) so the metrics won't shows up
+<img width="1917" height="1078" alt="Screenshot 2026-10-23 024328" src="https://github.com/user-attachments/assets/d031f190-3336-42a6-bd18-0445d1fc3510" />
+<img width="1917" height="1078" alt="Screenshot 2026-10-23 024154" src="https://github.com/user-attachments/assets/391755b1-7306-4384-a9a6-3eef811a845e" />
+
+# Alert reciever get's active and sends alert
+<img width="1917" height="1078" alt="Screenshot 2026-10-23 024423" src="https://github.com/user-attachments/assets/071160d3-2cc9-4ce0-b035-0f575d211d18" />
+<img width="1917" height="1078" alt="Screenshot 2026-10-23 024417" src="https://github.com/user-attachments/assets/367d2ec1-c0a5-4d50-a282-d1d1c80c875e" />
+<img width="1917" height="1078" alt="Screenshot 2026-10-23 024406" src="https://github.com/user-attachments/assets/50fa2467-4221-4b41-bbb6-419162d6e508" />
+
+# DevMonitor V/s Grafana
+<img width="1561" height="477" alt="image" src="https://github.com/user-attachments/assets/8cab7bb8-8c96-4b94-9755-2d63ed35d25a" />
+
+# You can connect with your website URl
+<img width="1917" height="1023" alt="image" src="https://github.com/user-attachments/assets/e3ff859a-017a-47ff-9fd6-1e844ce1ebe3" />
+
+# Application SDk by generating API keys
+<img width="1917" height="966" alt="image" src="https://github.com/user-attachments/assets/94550a25-33a7-4f63-b941-602d9d695f1c" />
+<img width="1896" height="1020" alt="image" src="https://github.com/user-attachments/assets/a0587f27-7b3d-42d4-9a04-b1f2ae9ef63c" />
+<img width="1532" height="696" alt="image" src="https://github.com/user-attachments/assets/cbba8794-9876-4084-9884-756be467ac3b" />
+<img width="1542" height="542" alt="image" src="https://github.com/user-attachments/assets/1dbe67c5-cd14-4e24-9fa2-020467d36e56" />
+
+# Server(Agent)
+<img width="1542" height="826" alt="image" src="https://github.com/user-attachments/assets/024baa54-f31a-4ca9-b60f-5b4ac7958a11" />
